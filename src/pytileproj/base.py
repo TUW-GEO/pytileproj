@@ -1,4 +1,4 @@
-# Copyright (c) 2021, TU Wien, Department of Geodesy and Geoinformation
+# Copyright (c) 2025, TU Wien
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,8 +25,6 @@
 # The views and conclusions contained in the software and documentation are
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
-
-
 """
 Code for Tiled Projection Systems.
 """
@@ -42,15 +40,14 @@ from pyproj import Transformer
 
 
 class TPSCoreProperty(object):
-
     """
     Class holding information needed at every level of `TiledProjectionSystem`,
     the alltime-valid "core properties".
     With this, core parameters are everywhere accessible via the same name.
     """
 
-    def __init__(self, tag, projection, sampling, tiletype,
-                 tile_xsize_m, tile_ysize_m):
+    def __init__(self, tag, projection, sampling, tiletype, tile_xsize_m,
+                 tile_ysize_m):
         """
         Initialises a TPSCoreProperty.
 
@@ -80,7 +77,6 @@ class TPSCoreProperty(object):
 
 
 class TPSProjection():
-
     """
     Projection class holding and translating the definitions of a projection when initialising.
     """
@@ -197,8 +193,8 @@ class TiledProjectionSystem(object):
         tiletype = self.get_tiletype(sampling)
         tile_xsize_m, tile_ysize_m = self.get_tilesize(sampling)
 
-        self.core = TPSCoreProperty(
-            tag, None, sampling, tiletype, tile_xsize_m, tile_ysize_m)
+        self.core = TPSCoreProperty(tag, None, sampling, tiletype,
+                                    tile_xsize_m, tile_ysize_m)
 
         self.subgrids = self.define_subgrids()
 
@@ -237,7 +233,9 @@ class TiledProjectionSystem(object):
 
         if geometry.GetGeometryName() in ['POLYGON', 'MULTIPOLYGON']:
             for x in self.subgrids.keys():
-                if ptpgeometry.check_lonlat_intersection(geometry, self.subgrids.get(x).polygon_geog):
+                if ptpgeometry.check_lonlat_intersection(
+                        geometry,
+                        self.subgrids.get(x).polygon_geog):
                     covering_subgrid.append(x)
 
         if geometry.GetGeometryName() in ['POINT', 'MULTIPOINT']:
@@ -301,14 +299,15 @@ class TiledProjectionSystem(object):
 
         # create point geometry
         lonlatprojection = TPSProjection(epsg=4326)
-        point_geom = ptpgeometry.create_point_geometry(lon, lat, lonlatprojection.osr_spref)
+        point_geom = ptpgeometry.create_point_geometry(
+            lon, lat, lonlatprojection.osr_spref)
 
         # search for co-locating subgrid
         subgrid = self.locate_geometry_in_subgrids(point_geom)[0]
 
-        x, y, = ptpgeometry.uv2xy(lon, lat,
-                                  lonlatprojection.osr_spref,
-                                  self.subgrids[subgrid].core.projection.osr_spref)
+        x, y, = ptpgeometry.uv2xy(
+            lon, lat, lonlatprojection.osr_spref,
+            self.subgrids[subgrid].core.projection.osr_spref)
 
         return np.full_like(x, subgrid, dtype=(str, len(subgrid))), x, y
 
@@ -335,7 +334,9 @@ class TiledProjectionSystem(object):
             TPS grid coordinates
         """
 
-        tf = Transformer.from_crs(('epsg', '4326'), self.subgrids[subgrid].core.projection.proj4, always_xy=True)
+        tf = Transformer.from_crs(('epsg', '4326'),
+                                  self.subgrids[subgrid].core.projection.proj4,
+                                  always_xy=True)
         x, y = tf.transform(lon, lat)
 
         return subgrid, x, y
@@ -465,10 +466,14 @@ class TiledProjectionSystem(object):
 
             elif bbox is not None:
                 segment = 50000 if osr_spref.IsProjected() else 0.5
-                roi_geometry = ptpgeometry.bbox2polygon(bbox, osr_spref, segment=segment)
+                roi_geometry = ptpgeometry.bbox2polygon(bbox,
+                                                        osr_spref,
+                                                        segment=segment)
 
         # switch for ROI defined by a single polygon or point(s)
-        if roi_geometry.GetGeometryName() in ['POLYGON', 'MULTIPOINT', 'POINT']:
+        if roi_geometry.GetGeometryName() in [
+                'POLYGON', 'MULTIPOINT', 'POINT'
+        ]:
 
             tiles = self._search_tiles_in_roi(roi_geometry=roi_geometry,
                                               subgrid_ids=subgrid_ids,
@@ -533,8 +538,11 @@ class TiledProjectionSystem(object):
             elif projected == 1:
                 max_segment = 50000
             else:
-                raise Warning('Please check unit of geometry before reprojection!')
-            roi_geometry = ptpgeometry.transform_geometry(roi_geometry, geog_sr, segment=max_segment)
+                raise Warning(
+                    'Please check unit of geometry before reprojection!')
+            roi_geometry = ptpgeometry.transform_geometry(roi_geometry,
+                                                          geog_sr,
+                                                          segment=max_segment)
 
         if roi_geometry.GetGeometryName() == 'MULTIPOLYGON':
             roi_polygons = []
@@ -553,13 +561,13 @@ class TiledProjectionSystem(object):
 
             # finding tiles
             for sgrid_id in subgrid_ids:
-                overlapped_tiles.extend(self.subgrids[sgrid_id].search_tiles_over_geometry(
-                    roi_polygon, coverland=coverland))
+                overlapped_tiles.extend(
+                    self.subgrids[sgrid_id].search_tiles_over_geometry(
+                        roi_polygon, coverland=coverland))
         return list(set(overlapped_tiles))
 
 
 class TiledProjection(object):
-
     """
     Class holding the projection and tiling definition of a
     tiled projection space.
@@ -594,7 +602,8 @@ class TiledProjection(object):
         """
 
         self.core = core
-        self.polygon_geog = ptpgeometry.segmentize_geometry(polygon_geog, segment=0.5)
+        self.polygon_geog = ptpgeometry.segmentize_geometry(polygon_geog,
+                                                            segment=0.5)
         self.polygon_proj = ptpgeometry.transform_geometry(
             self.polygon_geog, self.core.projection.osr_spref)
         self.bbox_proj = ptpgeometry.get_geometry_envelope(
@@ -628,7 +637,8 @@ class TiledProjection(object):
             as (lonmin, latmin, lonmax, latmax)
 
         """
-        return ptpgeometry.get_geometry_envelope(self.polygon_geog, rounding=0.0001)
+        return ptpgeometry.get_geometry_envelope(self.polygon_geog,
+                                                 rounding=0.0001)
 
     def get_bbox_proj(self):
         """
@@ -664,8 +674,8 @@ class TiledProjection(object):
         """
         # set up spatial references
 
-
-        tf = Transformer.from_crs(self.core.projection.proj4, ('epsg', '4326'), always_xy=True)
+        tf = Transformer.from_crs(self.core.projection.proj4, ('epsg', '4326'),
+                                  always_xy=True)
         lon, lat = tf.transform(x, y)
 
         return lon, lat
@@ -694,15 +704,16 @@ class TiledProjection(object):
             if geometry.Intersects(self.polygon_geog):
                 # get intersect area with subgrid in latlon
                 intersect_geometry = geometry.Intersection(self.polygon_geog)
-                intersect_geometry = ptpgeometry.transform_geometry(intersect_geometry,
-                                                                    self.projection.osr_spref)
+                intersect_geometry = ptpgeometry.transform_geometry(
+                    intersect_geometry, self.projection.osr_spref)
             else:
                 return overlapped_tiles
 
         if geometry.GetGeometryName() in ['POLYGON', 'MULTIPOLYGON']:
 
             # get intersect area with subgrid in latlon
-            intersect = ptpgeometry.get_lonlat_intersection(geometry, self.polygon_geog)
+            intersect = ptpgeometry.get_lonlat_intersection(
+                geometry, self.polygon_geog)
 
             # check if geom intersects subgrid
             if intersect.Area() == 0.0:
@@ -716,9 +727,12 @@ class TiledProjection(object):
             elif projected == 1:
                 max_segment = 50000
             else:
-                raise Warning('Please check unit of geometry before reprojection!')
+                raise Warning(
+                    'Please check unit of geometry before reprojection!')
 
-            _ = ptpgeometry.transform_geometry(intersect, self.projection.osr_spref, segment=max_segment)
+            _ = ptpgeometry.transform_geometry(intersect,
+                                               self.projection.osr_spref,
+                                               segment=max_segment)
             intersect_geometry = _.MakeValid()
 
         # get envelope of the geometry
@@ -736,15 +750,14 @@ class TiledProjection(object):
             if t.polygon_proj.Intersects(intersect_geometry):
 
                 # get only tile if coverland is satisfied
-                if not coverland or self.tilesys.check_tile_covers_land(t.name):
+                if not coverland or self.tilesys.check_tile_covers_land(
+                        t.name):
                     overlapped_tiles.append(t.name)
-
 
         return overlapped_tiles
 
 
 class TilingSystem(object):
-
     """
     Class defining the tiling system and providing methods for queries and handling.
 
@@ -784,8 +797,10 @@ class TilingSystem(object):
         self.y0 = y0
         self.xstep = self.core.tile_xsize_m
         self.ystep = self.core.tile_ysize_m
-        self.polygon_proj = ptpgeometry.transform_geometry(polygon_geog, self.core.projection.osr_spref)
-        self.bbox_proj = ptpgeometry.get_geometry_envelope(self.polygon_proj, rounding=self.core.sampling)
+        self.polygon_proj = ptpgeometry.transform_geometry(
+            polygon_geog, self.core.projection.osr_spref)
+        self.bbox_proj = ptpgeometry.get_geometry_envelope(
+            self.polygon_proj, rounding=self.core.sampling)
 
     def __getattr__(self, item):
         '''
@@ -795,7 +810,6 @@ class TilingSystem(object):
             return self.core.__dict__[item]
         else:
             return self.__dict__[item]
-
 
     @abc.abstractmethod
     def create_tile(self, name=None, x=None, y=None):
@@ -977,9 +991,12 @@ class TilingSystem(object):
         factor_y = tsize_y
 
         llxs = list(
-            range(xmin // tsize_x * factor_x, xmax // tsize_x * factor_x + 1, factor_x))
-        llys = list(reversed(
-            range(ymin // tsize_y * factor_y, ymax // tsize_y * factor_y + 1, factor_y)))
+            range(xmin // tsize_x * factor_x, xmax // tsize_x * factor_x + 1,
+                  factor_x))
+        llys = list(
+            reversed(
+                range(ymin // tsize_y * factor_y,
+                      ymax // tsize_y * factor_y + 1, factor_y)))
 
         nx = len(llxs)
         ny = len(llys)
@@ -1030,10 +1047,12 @@ class TilingSystem(object):
                     be = int((bbox[1] - extent[1]) // tile.core.sampling)
                 # right_edge
                 if extent[2] > bbox[2]:
-                    re = int((bbox[2] - extent[2] + self.core.tile_xsize_m) // tile.core.sampling)
+                    re = int((bbox[2] - extent[2] + self.core.tile_xsize_m) //
+                             tile.core.sampling)
                 # top_edge
                 if extent[3] > bbox[3]:
-                    te = int((bbox[3] - extent[3] + self.core.tile_ysize_m) // tile.core.sampling)
+                    te = int((bbox[3] - extent[3] + self.core.tile_ysize_m) //
+                             tile.core.sampling)
 
                 # subset holding indices of the tile that cover the bounding box.
                 tile.active_subset_px = le, be, re, te
@@ -1043,7 +1062,8 @@ class TilingSystem(object):
         return tiles
 
     @abc.abstractmethod
-    def get_congruent_tiles_from_tilename(self, tilename,
+    def get_congruent_tiles_from_tilename(self,
+                                          tilename,
                                           target_sampling=None,
                                           target_tiletype=None):
         """
@@ -1075,7 +1095,8 @@ class TilingSystem(object):
 
         return []
 
-    def collect_congruent_tiles(self, tiles,
+    def collect_congruent_tiles(self,
+                                tiles,
                                 target_sampling=None,
                                 target_tiletype=None):
         """
@@ -1097,13 +1118,12 @@ class TilingSystem(object):
             e.g. ['E000N054T6', 'E000N060T6']
         """
 
-
-
         cover_tiles = []
         for t in tiles:
-            cover_tiles += self.get_congruent_tiles_from_tilename(t,
-                                                                  target_sampling=target_sampling,
-                                                                  target_tiletype=target_tiletype)
+            cover_tiles += self.get_congruent_tiles_from_tilename(
+                t,
+                target_sampling=target_sampling,
+                target_tiletype=target_tiletype)
 
         return list(set(cover_tiles))
 
@@ -1143,8 +1163,8 @@ class Tile(object):
 
         self.polygon_proj = self.get_extent_geometry_proj()
         self.polygon_geog = self.get_extent_geometry_geog()
-        self.bbox_proj = ptpgeometry.get_geometry_envelope(self.polygon_proj,
-                                                           rounding=self.core.sampling)
+        self.bbox_proj = ptpgeometry.get_geometry_envelope(
+            self.polygon_proj, rounding=self.core.sampling)
         self.bbox_geog = ptpgeometry.get_geometry_envelope(self.polygon_geog,
                                                            rounding=0.000001)
 
@@ -1179,9 +1199,7 @@ class Tile(object):
             limits in the terms of (xmin, ymin, xmax, ymax)
         """
 
-        return (self.llx,
-                self.lly,
-                self.llx + self.core.tile_xsize_m,
+        return (self.llx, self.lly, self.llx + self.core.tile_xsize_m,
                 self.lly + self.core.tile_ysize_m)
 
     def get_extent_geometry_proj(self):
@@ -1193,9 +1211,10 @@ class Tile(object):
         OGRGeometry
 
         """
-        return ptpgeometry.bbox2polygon((self._limits_m()[0:2], self._limits_m()[2:4]),
-                                        self.core.projection.osr_spref,
-                                        segment=self.x_size_px * self.core.sampling / 4)
+        return ptpgeometry.bbox2polygon(
+            (self._limits_m()[0:2], self._limits_m()[2:4]),
+            self.core.projection.osr_spref,
+            segment=self.x_size_px * self.core.sampling / 4)
 
     def get_extent_geometry_geog(self):
         """
@@ -1269,7 +1288,8 @@ class Tile(object):
         """
 
         x = self._subset_px
-        return tuple((x[0], self.y_size_px - x[1], x[2], self.y_size_px - x[3]))
+        return tuple(
+            (x[0], self.y_size_px - x[1], x[2], self.y_size_px - x[3]))
 
     def geotransform(self):
         """
@@ -1282,8 +1302,10 @@ class Tile(object):
             as (llx, x pixel spacing, 0, lly, 0, y pixel spacing)
         """
 
-        geot = [self.llx, self.core.sampling, 0,
-                self.lly + self.core.tile_ysize_m, 0, -self.core.sampling]
+        geot = [
+            self.llx, self.core.sampling, 0, self.lly + self.core.tile_ysize_m,
+            0, -self.core.sampling
+        ]
 
         return geot
 
@@ -1299,8 +1321,9 @@ class Tile(object):
             as (llx, x pixel spacing, 0, lly, 0, y pixel spacing)
         """
 
-        geot = [self.llx, self.core.sampling, 0,
-                self.lly, 0, self.core.sampling]
+        geot = [
+            self.llx, self.core.sampling, 0, self.lly, 0, self.core.sampling
+        ]
 
         return geot
 
@@ -1347,8 +1370,9 @@ class Tile(object):
         x = gt[0] + i * gt[1] + j * gt[2]
         y = gt[3] + i * gt[4] + j * gt[5]
 
-        assert offset in ['ll', 'lr', 'ul', 'ur', 'center'], (
-            "offset must be one of ['ll', 'lr', 'ul', 'ur', 'center']")
+        assert offset in [
+            'll', 'lr', 'ul', 'ur', 'center'
+        ], ("offset must be one of ['ll', 'lr', 'ul', 'ur', 'center']")
 
         if offset == 'center':
             xcenterpos = gt[1] / 2
@@ -1424,9 +1448,10 @@ class Tile(object):
 
         # get the indices
         i = (-1.0 * (gt[2] * gt[3] - gt[0] * gt[5] + gt[5] * x - gt[2] * y) /
-                       (gt[2] * gt[4] - gt[1] * gt[5]))
-        j = (-1.0 * (-1 * gt[1] * gt[3] + gt[0] * gt[4] - gt[4] * x + gt[1] * y) /
-                       (gt[2] * gt[4] - gt[1] * gt[5]))
+             (gt[2] * gt[4] - gt[1] * gt[5]))
+        j = (-1.0 *
+             (-1 * gt[1] * gt[3] + gt[0] * gt[4] - gt[4] * x + gt[1] * y) /
+             (gt[2] * gt[4] - gt[1] * gt[5]))
 
         # round to lower-closest integer
         i = math.floor(i)
@@ -1445,8 +1470,10 @@ class Tile(object):
             format
         """
 
-        geotags = {'geotransform': self.geotransform(),
-                   'spatialreference': self.core.projection.wkt}
+        geotags = {
+            'geotransform': self.geotransform(),
+            'spatialreference': self.core.projection.wkt
+        }
 
         return geotags
 
@@ -1473,14 +1500,16 @@ class GlobalTile(Tile):
         super(GlobalTile, self).__init__(core, name, 0, 0)
         self.typename = 'TG'
         self.core.tiletype = self.typename
-        self.core.tile_xsize_m = np.int((np.floor(bbox_polygon_proj[1] /
-                                                  self.core.sampling) * self.core.sampling) -
-                                        (np.ceil(bbox_polygon_proj[0] /
-                                                 self.core.sampling) * self.core.sampling))
-        self.core.tile_ysize_m = np.int((np.floor(bbox_polygon_proj[3] /
-                                                  self.core.sampling) * self.core.sampling) -
-                                        (np.ceil(bbox_polygon_proj[2] /
-                                                 self.core.sampling) * self.core.sampling))
+        self.core.tile_xsize_m = np.int(
+            (np.floor(bbox_polygon_proj[1] / self.core.sampling) *
+             self.core.sampling) -
+            (np.ceil(bbox_polygon_proj[0] / self.core.sampling) *
+             self.core.sampling))
+        self.core.tile_ysize_m = np.int(
+            (np.floor(bbox_polygon_proj[3] / self.core.sampling) *
+             self.core.sampling) -
+            (np.ceil(bbox_polygon_proj[2] / self.core.sampling) *
+             self.core.sampling))
         self.x_size_px = int(self.core.tile_xsize_m / self.core.sampling)
         self.y_size_px = int(self.core.tile_ysize_m / self.core.sampling)
         self._subset_px = (0, 0, self.x_size_px, self.y_size_px)

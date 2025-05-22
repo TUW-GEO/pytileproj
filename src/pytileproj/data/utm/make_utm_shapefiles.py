@@ -1,4 +1,4 @@
-# Copyright (c) 2021, TU Wien, Department of Geodesy and Geoinformation
+# Copyright (c) 2025, TU Wien
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,24 +25,16 @@
 # The views and conclusions contained in the software and documentation are
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
-
-
-'''
-Created on July 12, 2018
-
+"""
 A script for creating a shapefile that contains all zones of the UTM/UPS grid
 system.
+"""
 
-@author: Bernhard Bauer-Marschallinger, bbm@geo.tuwien.ac.at
-
-'''
-
-
-import numpy as np
 import os
 import shutil
+
+import numpy as np
 from osgeo import ogr
-from osgeo import osr
 
 from pytileproj import geometry
 
@@ -50,13 +42,11 @@ from pytileproj import geometry
 # fc8af8e2-0818-4f50-baf0-2cc04cbaa541
 infile = r"D:\Arbeit\bfix\gis\utm_ups_zones\utmzone.shp"
 
-
 driver = ogr.GetDriverByName("ESRI Shapefile")
 ds = driver.Open(infile, 0)
 layer = ds.GetLayer(0)
 srs = layer.GetSpatialRef()
 n_features = layer.GetFeatureCount()
-
 
 gridpath = r"D:\Arbeit\bfix\gis\utm_ups_zones\grids"
 shapepath = r"D:\Arbeit\bfix\gis\utm_ups_zones\grids\000_grids_combined"
@@ -70,8 +60,8 @@ os.mkdir(gridpath)
 os.mkdir(shapepath)
 
 drv = ogr.GetDriverByName("ESRI Shapefile")
-dst_ds = drv.CreateDataSource(os.path.join(
-    shapepath, 'UTM_UPS_V10_ALL_ZONES_GEOG_ZONE.shp'))
+dst_ds = drv.CreateDataSource(
+    os.path.join(shapepath, 'UTM_UPS_V10_ALL_ZONES_GEOG_ZONE.shp'))
 dst_layer = dst_ds.CreateLayer("out", srs=srs)
 fd = ogr.FieldDefn('ZONE', ogr.OFTInteger)
 dst_layer.CreateField(fd)
@@ -116,11 +106,9 @@ for n in ns:
 
 all_zones = np.unique(zones)
 
-
 polar_rows = ['A', 'B', 'Y', 'Z']
 south_rows = ['C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M']
 north_rows = ['N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X']
-
 
 for zone_number in all_zones:
     if zone_number == 0:
@@ -133,8 +121,8 @@ for zone_number in all_zones:
             geometries_merged = geometries_in_zone[0].Clone()
 
             # modify the geometry such it has no segment longer then the given distance
-            geometries_merged = geometry.segmentize_geometry(
-                geometries_merged, segment=0.5)
+            geometries_merged = geometry.segmentize_geometry(geometries_merged,
+                                                             segment=0.5)
 
             xfeature = ogr.Feature(dst_layer.GetLayerDefn())
 
@@ -147,15 +135,13 @@ for zone_number in all_zones:
             xfeature.SetGeometry(geometries_merged)
             dst_layer.CreateFeature(xfeature)
 
-            geometries_merged.AssignSpatialReference(
-                dst_layer.GetSpatialRef())
+            geometries_merged.AssignSpatialReference(dst_layer.GetSpatialRef())
             zone_string = 'Z' + str(zone_number).zfill(2) + letter
             xpath = os.path.join(gridpath, zone_string, 'GEOG')
             if not os.path.exists(xpath):
                 os.makedirs(xpath)
-            filename = os.path.join(xpath,
-                                    'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(
-                                        zone_string))
+            filename = os.path.join(
+                xpath, 'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(zone_string))
             geometry.write_geometry(geometries_merged, filename)
 
             xfeature = None
@@ -186,23 +172,25 @@ for zone_number in all_zones:
             if 'W' in east_lon:
                 east *= -1
 
-        si = [i for i in range(len(ind)) if
-              np.array(rows)[ind][i] in south_rows]
+        si = [
+            i for i in range(len(ind)) if np.array(rows)[ind][i] in south_rows
+        ]
         geometries_in_south_zone = np.array(geometries)[ind][si]
         n_si = len(si)
 
         geometries_merged_south = geometries_in_south_zone[0].Clone()
-        for f in range(n_si-1):
+        for f in range(n_si - 1):
             geometries_merged_south = geometries_merged_south.Union(
                 geometries_in_south_zone[f + 1])
 
-        ni = [i for i in range(len(ind)) if
-              np.array(rows)[ind][i] in north_rows]
+        ni = [
+            i for i in range(len(ind)) if np.array(rows)[ind][i] in north_rows
+        ]
         geometries_in_north_zone = np.array(geometries)[ind][ni]
         n_ni = len(ni)
 
         geometries_merged_north = geometries_in_north_zone[0].Clone()
-        for f in range(n_ni-1):
+        for f in range(n_ni - 1):
             geometries_merged_north = geometries_merged_north.Union(
                 geometries_in_north_zone[f + 1])
 
@@ -227,9 +215,8 @@ for zone_number in all_zones:
         xpath = os.path.join(gridpath, zone_string, 'GEOG')
         if not os.path.exists(xpath):
             os.makedirs(xpath)
-        filename = os.path.join(xpath,
-                                'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(
-                                    zone_string))
+        filename = os.path.join(
+            xpath, 'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(zone_string))
         geometry.write_geometry(geometries_merged_south, filename)
 
         xfeature = None
@@ -255,9 +242,8 @@ for zone_number in all_zones:
         xpath = os.path.join(gridpath, zone_string, 'GEOG')
         if not os.path.exists(xpath):
             os.makedirs(xpath)
-        filename = os.path.join(xpath,
-                                'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(
-                                    zone_string))
+        filename = os.path.join(
+            xpath, 'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(zone_string))
         geometry.write_geometry(geometries_merged_north, filename)
 
         xfeature = None

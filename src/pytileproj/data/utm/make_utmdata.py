@@ -1,4 +1,4 @@
-# Copyright (c) 2021, TU Wien, Department of Geodesy and Geoinformation
+# Copyright (c) 2025, TU Wien
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,20 +26,12 @@
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
 
-
-'''
-Created on July 10, 2018
-
-make utmgrid.dat file for UTMGrid class
-
-@author: Senmao Cao, Senmao.Cao@geo.tuwien.ac.at
-'''
-
-
 import os
 import argparse
 import pickle
-from osgeo import ogr, osr
+
+from osgeo import osr
+
 from pytileproj import geometry
 from pytileproj.utmgrid import create_UTM_zone_names
 
@@ -101,8 +93,8 @@ def make_utmdata(outpath, version="V10"):
 def load_zone_extent(subgrid):
 
     module_path = os.path.dirname(os.path.abspath(__file__))
-    shape_file = os.path.join(os.path.dirname(module_path),
-                              "utm", "grids", subgrid, 'GEOG',
+    shape_file = os.path.join(os.path.dirname(module_path), "utm", "grids",
+                              subgrid, 'GEOG',
                               'UTM_UPS_V10_{}_GEOG_ZONE.shp'.format(subgrid))
 
     return geometry.open_geometry(shape_file)
@@ -135,8 +127,12 @@ def load_coverland_tiles(tile_fpath):
 def main():
     parser = argparse.ArgumentParser(description='Make UTMgrid Data File')
     parser.add_argument("outpath", help="output folder")
-    parser.add_argument("-v", "--version", dest="version", nargs=1,
-                        metavar="", help="UTM Grid Version. Default is V10.")
+    parser.add_argument("-v",
+                        "--version",
+                        dest="version",
+                        nargs=1,
+                        metavar="",
+                        help="UTM Grid Version. Default is V10.")
     args = parser.parse_args()
 
     outpath = os.path.abspath(args.outpath)

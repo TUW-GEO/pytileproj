@@ -1,4 +1,4 @@
-# Copyright (c) 2021, TU Wien, Department of Geodesy and Geoinformation
+# Copyright (c) 2025, TU Wien
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,8 +25,6 @@
 # The views and conclusions contained in the software and documentation are
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
-
-
 """
 Code for osgeo geometry operations.
 """
@@ -333,7 +331,7 @@ def create_polygon_geometry(points, osr_spref, segment=None):
     ring = ogr.Geometry(ogr.wkbLinearRing)
     for p in points:
         if len(p) == 2:
-            p += (0.0,)
+            p += (0.0, )
         ring.AddPoint(*p)
     ring.CloseRings()
 
@@ -346,7 +344,8 @@ def create_polygon_geometry(points, osr_spref, segment=None):
 
     # modify the geometry such it has no segment longer then the given distance
     if segment is not None:
-        polygon_geometry = segmentize_geometry(polygon_geometry, segment=segment)
+        polygon_geometry = segmentize_geometry(polygon_geometry,
+                                               segment=segment)
 
     return polygon_geometry
 
@@ -500,7 +499,9 @@ def get_lonlat_intersection(geometry1, geometry2):
 
     if geometry1c.GetGeometryName() == 'MULTIPOLYGON':
         geometry1c = ogr.ForceToPolygon(geometry1c)
-        print('Warning: get_lonlat_intersection(): Take care: Multipolygon is forced to Polygon!')
+        print(
+            'Warning: get_lonlat_intersection(): Take care: Multipolygon is forced to Polygon!'
+        )
 
     polygons = split_polygon_by_antimeridian(geometry1c)
 
@@ -535,14 +536,15 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
     # crossing the Greenwich meridian, but not the antimeridian,
     # which is most probably a wrong interpretion.
     # --> wrapping longitudes to the eastern Hemisphere (adding 360°)
-    if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons)) > split_limit):
+    if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons))
+                                                 > split_limit):
         new_points = [(y[0] + 360, y[1]) if y[0] < 0 else y for y in in_points]
-        lonlat_polygon = create_polygon_geometry(new_points,
-                                                 lonlat_polygon.GetSpatialReference(),
-                                                 segment=0.5)
+        lonlat_polygon = create_polygon_geometry(
+            new_points, lonlat_polygon.GetSpatialReference(), segment=0.5)
 
     # return input polygon if not cross anti-meridian
-    max_lon = np.max([p[0] for p in lonlat_polygon.GetGeometryRef(0).GetPoints()])
+    max_lon = np.max(
+        [p[0] for p in lonlat_polygon.GetGeometryRef(0).GetPoints()])
     if max_lon <= 180:
         return lonlat_polygon
 
@@ -550,7 +552,10 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
     antimeridian = LineString([(180, -90), (180, 90)])
 
     # use shapely for the splitting
-    merged = linemerge([Polygon(lonlat_polygon.GetBoundary().GetPoints()).boundary, antimeridian])
+    merged = linemerge([
+        Polygon(lonlat_polygon.GetBoundary().GetPoints()).boundary,
+        antimeridian
+    ])
     borders = unary_union(merged)
     polygons = polygonize(borders)
 
@@ -567,15 +572,18 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
         lons = [p[0] for p in point_coords]
 
         # all greater than 180° longitude (Western Hemisphere)
-        if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(lons, 180).all()):
+        if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(
+                lons, 180).all()):
             wrapped_points = [(y[0] - 360, y[1], y[2]) for y in point_coords]
 
         # all less than 180° longitude (Eastern Hemisphere)
-        elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(lons, 180).all()):
+        elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(
+                lons, 180).all()):
             wrapped_points = point_coords
 
         # crossing the Greenwhich-meridian
-        elif (len(np.unique(np.sign(lons))) >= 2) and (np.mean(np.abs(lons)) < split_limit):
+        elif (len(np.unique(np.sign(lons))) >= 2) and (np.mean(np.abs(lons))
+                                                       < split_limit):
             wrapped_points = point_coords
 
         # crossing the Greenwhich-meridian, but should cross the antimeridian
@@ -609,7 +617,9 @@ def get_geometry_envelope(geometry, rounding=1.0):
 
     # get the "envelope" of a POINT geometry
     if geometry.ExportToWkt().startswith('POINT'):
-        out = tuple([int(x / rounding) * rounding for x in geometry.GetPoint()[0:2]])*2
+        out = tuple(
+            [int(x / rounding) * rounding
+             for x in geometry.GetPoint()[0:2]]) * 2
 
     # get the envelope for each sub-geometry
     # works for MULTIPOLYGON; POLYGON; MULTIPOINT
@@ -629,13 +639,14 @@ def get_geometry_envelope(geometry, rounding=1.0):
         envelope[:, 3] = li[:, 3]
 
         # exclude antimeridian as potential limit (experimential)
-        if geometry.GetSpatialReference().ExportToProj4().startswith('+proj=longlat') and (
-                n_geometries >= 2):
+        if geometry.GetSpatialReference().ExportToProj4().startswith(
+                '+proj=longlat') and (n_geometries >= 2):
             envelope[envelope == -180.0] = np.nan
             envelope[envelope == 180.0] = np.nan
 
         # get the extreme values as tuple
-        out = tuple((*np.nanmin(envelope, axis=0)[0:2], *np.nanmax(envelope, axis=0)[2:4]))
+        out = tuple((*np.nanmin(envelope, axis=0)[0:2],
+                     *np.nanmax(envelope, axis=0)[2:4]))
 
     return out
 
@@ -665,9 +676,11 @@ def round_vertices_of_polygon(geometry, decimals=0):
 
     for p in range(n_points):
         lon, lat, z = ring.GetPoint(p)
-        rlon, rlat, rz = [np.round(lon, decimals=decimals),
-                          np.round(lat, decimals=decimals),
-                          np.round(z, decimals=decimals)]
+        rlon, rlat, rz = [
+            np.round(lon, decimals=decimals),
+            np.round(lat, decimals=decimals),
+            np.round(z, decimals=decimals)
+        ]
         rounded_ring.AddPoint(rlon, rlat, rz)
 
     geometry_out = ogr.Geometry(ogr.wkbPolygon)
@@ -763,7 +776,9 @@ def setup_test_geom_siberia_antimeridian_180plus():
               (184.1800038679373, 65.74423313395079),
               (183.1741580487398, 67.46683765736415)]
 
-    poly_siberia_antim_180plus = create_polygon_geometry(points, osr_spref, segment=None)
+    poly_siberia_antim_180plus = create_polygon_geometry(points,
+                                                         osr_spref,
+                                                         segment=None)
 
     return poly_siberia_antim_180plus
 
@@ -787,6 +802,8 @@ def setup_test_geom_siberia_alaska():
               (198.4723636216472, 66.06909015550372),
               (198.7828129097253, 68.14247939909886)]
 
-    poly_siberia_alaska = create_polygon_geometry(points, osr_spref, segment=None)
+    poly_siberia_alaska = create_polygon_geometry(points,
+                                                  osr_spref,
+                                                  segment=None)
 
     return poly_siberia_alaska
