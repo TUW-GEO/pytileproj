@@ -7,6 +7,7 @@ Version 0.1.0
 
 - Update project metadata (pyscaffold v4.6)
 - Update github workflows
+- Remove gdal=3.1 pin
 
 Version 0.0.17
 ==============
