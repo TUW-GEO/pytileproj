@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
 - numpy
-- gdal=3.1
+- gdal
 - pyproj
 - shapely
 - pip
