@@ -1,9 +1,9 @@
-name: pytileproj_env
+name: pytileproj
 channels:
   - conda-forge
 dependencies:
-- numpy
-- gdal
-- pyproj
-- shapely
-- pip
+  - gdal
+  - pyproj
+  - shapely
+  - pip
+  - morecantile
