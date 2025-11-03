@@ -6,4 +6,5 @@ dependencies:
   - pyproj
   - shapely
   - pip
-  - morecantile
+  - morecantile >= 6.2
+  - requests

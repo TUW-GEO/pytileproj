@@ -29,16 +29,96 @@
 Code for Tiled Projection Systems.
 """
 
-import abc
-import math
+from morecantile.models import TileMatrix, TileMatrixSet
+from pydantic import BaseModel, AfterValidator, PositiveInt, PositiveFloat
+from typing import Annotated, Literal, Optional, Tuple, Union
+import pyproj
+from osgeo import ogr, osr
+import requests
+import warnings
+import json
+from shapely.geometry import Polygon, MultiPolygon
 
-import numpy as np
-from osgeo import osr
 
-import pytileproj.geometry as ptpgeometry
-from pyproj import Transformer
+def translate_proj_zone(input: str | ogr.Geometry | None) -> ogr.Geometry | None:
+    pass
+
+def _fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
+    epsg_code_url = "https://apps.epsg.org/api/v1/ProjectedCoordRefSystem/"
+    epsg_extent_url = "https://apps.epsg.org/api/v1/Extent/"
+
+    zone_geom = None
+    code_resp = requests.get(f'{epsg_code_url}/{epsg}/')
+    if code_resp.ok:
+        code_data = json.loads(code_resp.content)
+        code_usages = code_data["Usage"]
+        if len(code_usages):
+            if len(code_usages) != 1:
+                warnings.warn("Multiple EPSG code usages found!")
+            code_usage = code_usages[-1]
+            extent_resp = requests.get(f'{epsg_extent_url}/{code_usage["Extent"]["Code"]}/polygon')
+            if extent_resp.ok:
+                extent_data = json.loads(extent_resp.content)
+                geom_type = extent_data['type']
+                coords = extent_data['coordinates']
+                if geom_type == "Polygon":
+                    zone_geom = Polygon(coords)
+                elif geom_type == "MultiPolygon":
+                    zone_geom = MultiPolygon(coords)
+                else:
+                    raise ValueError(f"Geometry type '{geom_type}' not supported.")
+                zone_geom = ogr.CreateGeometryFromWkt(zone_geom.wkt)
+                zone_sref = osr.SpatialReference()
+                zone_sref.ImportFromEPSG(4326)
+                zone_geom.AssignSpatialReference(zone_sref)
+            
+    return zone_geom
 
 
+class ProjGrid(BaseModel, arbitrary_types_allowed=True):
+    name: str
+    crs: pyproj.CRS
+    extent:  Tuple[float, float, float, float]
+    sampling: PositiveFloat
+    origin_xy: Tuple[float, float]
+    tile_width_px: PositiveInt
+    tile_height_px: PositiveInt
+    tiling_level: Optional[PositiveInt] = 0
+    x_direction: Optional[Literal["E", "W"]] = "E"
+    y_direction: Optional[Literal["N", "S"]] = "N"
+    proj_zone: Annotated[str | ogr.Geometry | None, AfterValidator(translate_proj_zone)] = None 
+    
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        corner_of_ori = 'bottomLeft' if self.y_direction == 'N' else 'topLeft'
+        matrix_width = int((self.extent[2] - self.extent[0]) // (self.tile_width_px * self.sampling))
+        matrix_height = int((self.extent[3] - self.extent[1]) // (self.tile_height_px * self.sampling))
+
+        self._tm = TileMatrix(scaleDenominator= self.sampling/ 0.28e-3,  # per OGC definition
+                              cellSize=self.sampling,
+                              cornerOfOrigin=corner_of_ori,
+                              pointOfOrigin=self.origin_xy,
+                              tileWidth=self.tile_width_px,
+                              tileHeight=self.tile_height_px,
+                              matrixWidth=matrix_width,
+                              matrixHeight=matrix_height,
+                              id=str(self.tiling_level), title=f"{self.name} at tiling level {self.tiling_level}")
+        
+        self.proj_zone = _fetch_proj_zone(self._epsg) if self._epsg else None
+
+    @property
+    def _epsg(self) -> int:
+        return self.crs.to_epsg()
+
+    def __eq__(self, other: Union['ProjGrid', object]) -> bool:
+        return True
+
+class ProjPyramid(BaseModel):
+    pass
+
+'''
 class TPSCoreProperty(object):
     """
     Class holding information needed at every level of `TiledProjectionSystem`,
@@ -199,9 +279,9 @@ class TiledProjectionSystem(object):
         self.subgrids = self.define_subgrids()
 
     def __getattr__(self, item):
-        '''
+        """
         short link for items of subgrids and core
-        '''
+        """
         if item in self.subgrids:
             return self.subgrids[item]
         elif item in self.core.__dict__:
@@ -618,9 +698,9 @@ class TiledProjection(object):
         self.tilesys = tilingsystem
 
     def __getattr__(self, item):
-        '''
+        """
         short link for items of core
-        '''
+        """
         if item in self.core.__dict__:
             return self.core.__dict__[item]
         else:
@@ -803,9 +883,9 @@ class TilingSystem(object):
             self.polygon_proj, rounding=self.core.sampling)
 
     def __getattr__(self, item):
-        '''
+        """
         short link for items of core
-        '''
+        """
         if item in self.core.__dict__:
             return self.core.__dict__[item]
         else:
@@ -1169,9 +1249,9 @@ class Tile(object):
                                                            rounding=0.000001)
 
     def __getattr__(self, item):
-        '''
+        """
         short link for items of core
-        '''
+        """
         if item in self.core.__dict__:
             return self.core.__dict__[item]
         else:
@@ -1513,3 +1593,7 @@ class GlobalTile(Tile):
         self.x_size_px = int(self.core.tile_xsize_m / self.core.sampling)
         self.y_size_px = int(self.core.tile_ysize_m / self.core.sampling)
         self._subset_px = (0, 0, self.x_size_px, self.y_size_px)
+'''
+
+if __name__ == "__main__":
+    pass
