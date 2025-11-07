@@ -43,40 +43,6 @@ from shapely.ops import unary_union
 from shapely.ops import polygonize
 
 
-def get_geog_spatial_ref():
-    """
-    Small function to generate an OSR.SpatialReference() for the geographic lonlat-space.
-    This was necessary because GDAL>=3.0.0 is sensitive to
-        the axis order (or was changed the order, whatever, who really knows?) ;-)
-
-    Returns
-    -------
-    SpatialReference
-        osgeo spatial reference defining lonlat-space
-
-    """
-
-    geo_sr = osr.SpatialReference()
-    geo_sr.SetWellKnownGeogCS("EPSG:{}".format(str(4326)))
-
-    if gdal_version[0] == '3':
-        # "0" is "OAMS_TRADITIONAL_GIS_ORDER" which is lon-lat-order (like in GDAL 2.x)
-        # "1" is "OAMS_AUTHORITY_COMPLIANT " which is lat-lon-order (like in GDAL 3.x)
-        #               (following ISO:19111)
-        # please check https://gdal.org/tutorials/osr_api_tut.html
-        geo_sr.SetAxisMappingStrategy(0)
-
-    # nothing to do, as everything in pytileproj is using the lon-lat-order
-    elif gdal_version[0] == '2':
-        pass
-
-    # check for future releases
-    else:
-        return
-
-    return geo_sr
-
-
 def uv2xy(u, v, src_ref, dst_ref):
     """
     wrapper; reprojects a pair of point coordinates
