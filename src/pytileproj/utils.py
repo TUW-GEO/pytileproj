@@ -4,6 +4,9 @@ import json
 from shapely.geometry import Polygon, MultiPolygon
 from osgeo import ogr, osr
 
+from pytileproj._const import DEFAULT_TILE_SEG_NUM 
+from pytileproj.geom import transform_geometry
+
 
 def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
     epsg_code_url = "https://apps.epsg.org/api/v1/ProjectedCoordRefSystem/"

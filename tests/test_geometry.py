@@ -19,9 +19,9 @@ Tests for the geometry module of pytielproj.
 """
 import unittest
 
-from pytileproj.geometry import split_polygon_by_antimeridian
-from pytileproj.geometry import setup_test_geom_siberia_alaska
-from pytileproj.geometry import setup_test_geom_spitzbergen
+from pytileproj.geom import split_polygon_by_antimeridian
+from pytileproj.geom import setup_test_geom_siberia_alaska
+from pytileproj.geom import setup_test_geom_spitzbergen
 
 
 class TestGeometry(unittest.TestCase):

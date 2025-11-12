@@ -29,7 +29,7 @@
 Code for Tiled Projection Systems.
 """
 
-from morecantile.models import TileMatrix, TileMatrixSet, Tile, CRS
+from morecantile.models import TileMatrix, TileMatrixSet, CRS
 from pydantic import BaseModel, AfterValidator, NonNegativeFloat, NonNegativeInt
 from typing import Annotated, Literal, Optional, Tuple, List, Dict
 import pyproj
@@ -41,19 +41,18 @@ import shapely
 import numpy as np
 from pathlib import Path
 from shapely.geometry import Polygon, MultiPolygon
-from pytileproj.geometry import transform_geometry
+from pytileproj.geom import transform_geometry
 
 from pytileproj.tile import RegularTile, IrregularTile
 from pytileproj.utils import fetch_proj_zone
 
 
-class Grid(BaseModel, arbitrary_types_allowed=True):
+class RegularGrid(BaseModel, arbitrary_types_allowed=True):
     name: str
     extent:  Tuple[float, float, float, float]
     sampling: NonNegativeFloat
     origin_xy: Tuple[float, float]
     tile_shape_px: Tuple[NonNegativeInt, NonNegativeInt]
-    tiling_level: Optional[NonNegativeInt] = 0
     axis_orientation: Optional[Tuple[Literal["W", "E"], Literal["N", "S"]]] = ("E", "N") 
     
     _tm: TileMatrix 
@@ -73,18 +72,20 @@ class Grid(BaseModel, arbitrary_types_allowed=True):
                               tileHeight=self.tile_shape_px[1],
                               matrixWidth=matrix_width,
                               matrixHeight=matrix_height,
-                              id=str(self.tiling_level), title=f"{self.name} at tiling level {self.tiling_level}")
+                              id=self.name, title=self.name)
     
     @property
     def n_tiles(self) -> int:
         return self._tm.matrixHeight * self._tm.matrixWidth
     
+    @property
+    def tm(self) -> TileMatrix:
+        return self._tm
 
     def __iter__(self):
         for x in range(self._tm.matrixHeight):
             for y in range(self._tm.matrixWidth):
                 yield RegularTile(x, y, self.tiling_level)
-
 
     def to_ogc_repr(self) -> dict:
         return self._tm.model_dump()
@@ -99,8 +100,8 @@ def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
     return input
 
 
-class IrregularTileMatrix(BaseModel):
-
+class IrregularGrid(BaseModel):
+    name: str
     tiles: Dict[IrregularTile]
     adjacency_matrix: Annotated[np.ndarray | None, AfterValidator(validate_adj_matrix)] = None
 
@@ -119,6 +120,13 @@ class IrregularTileMatrix(BaseModel):
         nbr_tiles = [self[self.tile_ids[nbr_idx]] for nbr_idx in nbr_idxs]
 
         return nbr_tiles
+    
+    def tiles_in_bbox(self, bbox: tuple[float, float, float, float]):
+        min_x, min_y, max_x, max_y = bbox
+        bbox = Polygon([(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, max_y), (min_x, min_y)])
+        for tile in self.tiles.values():
+            if shapely.intersects(tile.boundary, bbox):
+                yield tile
     
     def _build_adjacency_matrix(self) -> np.ndarray:
         n_tiles = len(self.tiles)
@@ -140,22 +148,7 @@ class IrregularTileMatrix(BaseModel):
     
     def __getitem__(self, tile_id: str) -> IrregularTile:
         return self.tiles[tile_id]
-
+    
 
 if __name__ == "__main__":
-    epsg = 27704
-    extent = [0, 0, 300e3 * 20, 300e3 * 15]
-    sampling = 10
-    origin_xy = (0, 0)
-    tile_shape_px = 10000, 10000
-    tiling_level = 1
-    grid_t1 = Grid(name="E7EUT1", extent=extent, sampling=sampling, origin_xy=origin_xy, tile_shape_px=tile_shape_px, tiling_level=tiling_level)
-    sampling = 20
-    tile_shape_px = 15000, 15000
-    tiling_level = 0
-    grid_t3 = Grid(name="E7EUT3", extent=extent, sampling=sampling, origin_xy=origin_xy, tile_shape_px=tile_shape_px, tiling_level=tiling_level)
-    grids = [grid_t3, grid_t1]
-    pp = ProjPyramid(name="Equi7Europe", epsg=epsg, grids=grids)
-    pp.to_file("e7_def.json")
-    pp2 = ProjPyramid.from_file("e7_def.json")
     pass
