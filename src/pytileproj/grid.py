@@ -29,55 +29,54 @@
 Code for Tiled Projection Systems.
 """
 
-from morecantile.models import TileMatrix, TileMatrixSet, CRS
+from morecantile.models import TileMatrix
 from pydantic import BaseModel, AfterValidator, NonNegativeFloat, NonNegativeInt
 from typing import Annotated, Literal, Optional, Tuple, List, Dict
-import pyproj
-from osgeo import ogr, osr
-import requests
-import warnings
-import json
 import shapely
 import numpy as np
-from pathlib import Path
-from shapely.geometry import Polygon, MultiPolygon
-from pytileproj.geom import transform_geometry
+from shapely.geometry import Polygon
 
 from pytileproj.tile import RegularTile, IrregularTile
-from pytileproj.utils import fetch_proj_zone
 
 
 class RegularGrid(BaseModel, arbitrary_types_allowed=True):
     name: str
-    extent:  Tuple[float, float, float, float]
+    extent: Tuple[float, float, float, float]
     sampling: NonNegativeFloat
     origin_xy: Tuple[float, float]
     tile_shape_px: Tuple[NonNegativeInt, NonNegativeInt]
-    axis_orientation: Optional[Tuple[Literal["W", "E"], Literal["N", "S"]]] = ("E", "N") 
-    
-    _tm: TileMatrix 
+    axis_orientation: Optional[Tuple[Literal["W", "E"], Literal["N", "S"]]] = ("E", "N")
+
+    _tm: TileMatrix
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        corner_of_ori = 'bottomLeft' if self.axis_orientation[1] == 'N' else 'topLeft'
-        matrix_width = int((self.extent[2] - self.extent[0]) / (self.tile_shape_px[0] * self.sampling))
-        matrix_height = int((self.extent[3] - self.extent[1]) / (self.tile_shape_px[1] * self.sampling))
+        corner_of_ori = "bottomLeft" if self.axis_orientation[1] == "N" else "topLeft"
+        matrix_width = int(
+            (self.extent[2] - self.extent[0]) / (self.tile_shape_px[0] * self.sampling)
+        )
+        matrix_height = int(
+            (self.extent[3] - self.extent[1]) / (self.tile_shape_px[1] * self.sampling)
+        )
 
-        self._tm = TileMatrix(scaleDenominator= self.sampling/ 0.28e-3,  # per OGC definition
-                              cellSize=self.sampling,
-                              cornerOfOrigin=corner_of_ori,
-                              pointOfOrigin=self.origin_xy,
-                              tileWidth=self.tile_shape_px[0],
-                              tileHeight=self.tile_shape_px[1],
-                              matrixWidth=matrix_width,
-                              matrixHeight=matrix_height,
-                              id=self.name, title=self.name)
-    
+        self._tm = TileMatrix(
+            scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
+            cellSize=self.sampling,
+            cornerOfOrigin=corner_of_ori,
+            pointOfOrigin=self.origin_xy,
+            tileWidth=self.tile_shape_px[0],
+            tileHeight=self.tile_shape_px[1],
+            matrixWidth=matrix_width,
+            matrixHeight=matrix_height,
+            id=self.name,
+            title=self.name,
+        )
+
     @property
     def n_tiles(self) -> int:
         return self._tm.matrixHeight * self._tm.matrixWidth
-    
+
     @property
     def tm(self) -> TileMatrix:
         return self._tm
@@ -96,14 +95,16 @@ def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
         if input.ndim != 2:
             err_msg = "Adjacency matrix is expected to be passed as a 2D numpy array."
             raise ValueError(err_msg)
-    
+
     return input
 
 
 class IrregularGrid(BaseModel):
     name: str
     tiles: Dict[IrregularTile]
-    adjacency_matrix: Annotated[np.ndarray | None, AfterValidator(validate_adj_matrix)] = None
+    adjacency_matrix: Annotated[
+        np.ndarray | None, AfterValidator(validate_adj_matrix)
+    ] = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -113,21 +114,29 @@ class IrregularGrid(BaseModel):
     @property
     def tile_ids(self) -> List[str]:
         return list(self.tiles.keys())
-    
+
     def neighbours(self, tile_id: str) -> List[IrregularTile]:
         tile_idx = self.tile_ids.index(tile_id)
         nbr_idxs = self.adjacency_matrix[tile_idx, :]
         nbr_tiles = [self[self.tile_ids[nbr_idx]] for nbr_idx in nbr_idxs]
 
         return nbr_tiles
-    
+
     def tiles_in_bbox(self, bbox: tuple[float, float, float, float]):
         min_x, min_y, max_x, max_y = bbox
-        bbox = Polygon([(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, max_y), (min_x, min_y)])
+        bbox = Polygon(
+            [
+                (min_x, min_y),
+                (min_x, max_y),
+                (max_x, max_y),
+                (max_x, max_y),
+                (min_x, min_y),
+            ]
+        )
         for tile in self.tiles.values():
             if shapely.intersects(tile.boundary, bbox):
                 yield tile
-    
+
     def _build_adjacency_matrix(self) -> np.ndarray:
         n_tiles = len(self.tiles)
         adjacency_matrix = np.zeros((n_tiles, n_tiles), dtype=bool)
@@ -141,14 +150,14 @@ class IrregularGrid(BaseModel):
                         adjacency_matrix[j, i] = True
 
         return adjacency_matrix
-    
+
     def __iter__(self):
         for tile in self.tiles:
             yield tile
-    
+
     def __getitem__(self, tile_id: str) -> IrregularTile:
         return self.tiles[tile_id]
-    
+
 
 if __name__ == "__main__":
     pass

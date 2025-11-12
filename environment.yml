@@ -8,3 +8,4 @@ dependencies:
   - pip
   - morecantile >= 6.2
   - requests
+  - pre-commit

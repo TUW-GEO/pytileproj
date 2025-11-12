@@ -29,7 +29,6 @@
 Code for osgeo geometry operations.
 """
 
-from copy import deepcopy
 import warnings
 import numpy as np
 import shapely
@@ -37,7 +36,6 @@ from PIL import Image, ImageDraw
 
 from osgeo import ogr
 from osgeo import osr
-from osgeo.gdal import __version__ as gdal_version
 from typing import Tuple
 import pyproj
 
@@ -49,7 +47,10 @@ from shapely.ops import polygonize
 
 from pytileproj._const import DEFAULT_TILE_SEG_NUM, DECIMALS
 
-def xy2ij(x: float, y: float, geotrans: Tuple, origin: str = "ul") -> Tuple[int | np.ndarray, int | np.ndarray]:
+
+def xy2ij(
+    x: float, y: float, geotrans: Tuple, origin: str = "ul"
+) -> Tuple[int | np.ndarray, int | np.ndarray]:
     """
     Transforms global/world system coordinates to pixel coordinates/indexes.
 
@@ -78,15 +79,19 @@ def xy2ij(x: float, y: float, geotrans: Tuple, origin: str = "ul") -> Tuple[int 
 
     """
 
-    px_shift_map = {"ul": (0, 0),
-                    "ur": (1, 0),
-                    "lr": (1, 1),
-                    "ll": (0, 1),
-                    "c": (.5, .5)}
+    px_shift_map = {
+        "ul": (0, 0),
+        "ur": (1, 0),
+        "lr": (1, 1),
+        "ll": (0, 1),
+        "c": (0.5, 0.5),
+    }
 
     px_shift = px_shift_map.get(origin, None)
     if px_shift is None:
-        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead.".format(origin)
+        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead.".format(
+            origin
+        )
         warnings.warn(wrng_msg)
         px_shift = (0, 0)
 
@@ -95,15 +100,39 @@ def xy2ij(x: float, y: float, geotrans: Tuple, origin: str = "ul") -> Tuple[int 
     y -= px_shift[1] * geotrans[5]
 
     # solved equation system describing an affine model: https://gdal.org/user/raster_data_model.html
-    i = np.around((-1.0 * (geotrans[2] * geotrans[3] - geotrans[0] * geotrans[5] + geotrans[5] * x - geotrans[2] * y)/
-                   (geotrans[2] * geotrans[4] - geotrans[1] * geotrans[5])), decimals=DECIMALS).astype(int)
-    j = np.around((-1.0 * (-1 * geotrans[1] * geotrans[3] + geotrans[0] * geotrans[4] - geotrans[4] * x + geotrans[1] * y)/
-                   (geotrans[2] * geotrans[4] - geotrans[1] * geotrans[5])), decimals=DECIMALS).astype(int)
+    i = np.around(
+        (
+            -1.0
+            * (
+                geotrans[2] * geotrans[3]
+                - geotrans[0] * geotrans[5]
+                + geotrans[5] * x
+                - geotrans[2] * y
+            )
+            / (geotrans[2] * geotrans[4] - geotrans[1] * geotrans[5])
+        ),
+        decimals=DECIMALS,
+    ).astype(int)
+    j = np.around(
+        (
+            -1.0
+            * (
+                -1 * geotrans[1] * geotrans[3]
+                + geotrans[0] * geotrans[4]
+                - geotrans[4] * x
+                + geotrans[1] * y
+            )
+            / (geotrans[2] * geotrans[4] - geotrans[1] * geotrans[5])
+        ),
+        decimals=DECIMALS,
+    ).astype(int)
 
     return i, j
 
 
-def ij2xy(i: int, j: int, geotrans: Tuple, origin: str = "ul") -> Tuple[float | np.ndarray, float | np.ndarray]:
+def ij2xy(
+    i: int, j: int, geotrans: Tuple, origin: str = "ul"
+) -> Tuple[float | np.ndarray, float | np.ndarray]:
     """
     Transforms global/world system coordinates to pixel coordinates/indexes.
 
@@ -132,15 +161,19 @@ def ij2xy(i: int, j: int, geotrans: Tuple, origin: str = "ul") -> Tuple[float | 
 
     """
 
-    px_shift_map = {"ul": (0, 0),
-                    "ur": (1, 0),
-                    "lr": (1, 1),
-                    "ll": (0, 1),
-                    "c": (.5, .5)}
+    px_shift_map = {
+        "ul": (0, 0),
+        "ur": (1, 0),
+        "lr": (1, 1),
+        "ll": (0, 1),
+        "c": (0.5, 0.5),
+    }
 
     px_shift = px_shift_map.get(origin, None)
     if px_shift is None:
-        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead".format(origin)
+        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead".format(
+            origin
+        )
         warnings.warn(wrng_msg)
         px_shift = (0, 0)
 
@@ -155,7 +188,9 @@ def ij2xy(i: int, j: int, geotrans: Tuple, origin: str = "ul") -> Tuple[float | 
     return x, y
 
 
-def transform_coords(x: float, y: float, this_crs: pyproj.CRS, other_crs: pyproj.CRS) -> Tuple[float, float]:
+def transform_coords(
+    x: float, y: float, this_crs: pyproj.CRS, other_crs: pyproj.CRS
+) -> Tuple[float, float]:
     traffo = pyproj.Transformer.from_crs(this_crs, other_crs, always_xy=True)
     return traffo.transform(x, y)
 
@@ -185,9 +220,11 @@ def round_polygon_vertices(polygon: ogr.Geometry, decimals: int) -> ogr.Geometry
 
     for p in range(n_points):
         x, y, z = ring.GetPoint(p)
-        rx, ry, rz = [np.round(x, decimals=decimals),
-                      np.round(y, decimals=decimals),
-                      np.round(z, decimals=decimals)]
+        rx, ry, rz = [
+            np.round(x, decimals=decimals),
+            np.round(y, decimals=decimals),
+            np.round(z, decimals=decimals),
+        ]
         rounded_ring.AddPoint(rx, ry, rz)
 
     geometry_out = ogr.Geometry(ogr.wkbPolygon)
@@ -196,7 +233,9 @@ def round_polygon_vertices(polygon: ogr.Geometry, decimals: int) -> ogr.Geometry
     return geometry_out
 
 
-def transform_geometry(geometry: ogr.Geometry, sref: osr.SpatialReference, segment=None):
+def transform_geometry(
+    geometry: ogr.Geometry, sref: osr.SpatialReference, segment=None
+):
     """
     returns the reprojected geometry - in the specified spatial reference
 
@@ -224,8 +263,8 @@ def transform_geometry(geometry: ogr.Geometry, sref: osr.SpatialReference, segme
 
     geometry_out.TransformTo(sref)
 
-    if sref.ExportToProj4().startswith('+proj=longlat'):
-        if geometry_out.GetGeometryName() in ['POLYGON', 'MULTIPOLYGON']:
+    if sref.ExportToProj4().startswith("+proj=longlat"):
+        if geometry_out.GetGeometryName() in ["POLYGON", "MULTIPOLYGON"]:
             geometry_out = split_polygon_by_antimeridian(geometry_out)
 
     geometry = None
@@ -244,8 +283,12 @@ def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
     return transform_geometry(geom, get_lonlat_sref(), segment=DEFAULT_TILE_SEG_NUM)
 
 
-def rasterise_polygon(geom: shapely.Polygon, x_pixel_size: int | float, y_pixel_size: int | float, 
-                      extent: Tuple = None) -> np.ndarray:
+def rasterise_polygon(
+    geom: shapely.Polygon,
+    x_pixel_size: int | float,
+    y_pixel_size: int | float,
+    extent: Tuple = None,
+) -> np.ndarray:
     """
     Rasterises a Shapely polygon defined by a clockwise list of points.
 
@@ -283,8 +326,14 @@ def rasterise_polygon(geom: shapely.Polygon, x_pixel_size: int | float, y_pixel_
     xs, ys = list(zip(*geom_pts))
 
     # round coordinates to upper-left corner
-    xs = np.around(np.array(xs)/x_pixel_size, decimals=DECIMALS).astype(int) * x_pixel_size
-    ys = np.ceil(np.around(np.array(ys)/y_pixel_size, decimals=DECIMALS)).astype(int) * y_pixel_size # use ceil to round to upper corner
+    xs = (
+        np.around(np.array(xs) / x_pixel_size, decimals=DECIMALS).astype(int)
+        * x_pixel_size
+    )
+    ys = (
+        np.ceil(np.around(np.array(ys) / y_pixel_size, decimals=DECIMALS)).astype(int)
+        * y_pixel_size
+    )  # use ceil to round to upper corner
 
     # define extent of the polygon
     if extent is None:
@@ -300,7 +349,7 @@ def rasterise_polygon(geom: shapely.Polygon, x_pixel_size: int | float, y_pixel_
     n_cols = int(round((x_max - x_min) / x_pixel_size, DECIMALS)) + 1
 
     # raster with zeros
-    mask_img = Image.new('1', (n_cols, n_rows), 0)
+    mask_img = Image.new("1", (n_cols, n_rows), 0)
     rows = (np.around(np.abs(ys - y_max) / y_pixel_size, decimals=DECIMALS)).astype(int)
     cols = (np.around(np.abs(xs - x_min) / x_pixel_size, decimals=DECIMALS)).astype(int)
     ImageDraw.Draw(mask_img).polygon(list(zip(cols, rows)), outline=1, fill=1)
@@ -335,7 +384,7 @@ def segmentize_geometry(geometry, segment=0.5):
     return geometry_out
 
 
-def get_lonlat_intersection(geometry1, geometry2):
+def get_lonlat_intersection(geom_1: ogr.Geometry, geom_2: ogr.Geometry) -> ogr.Geometry:
     """
     gets the intersect in lonlat space.
     geometry1 is split at the antimeridian
@@ -356,23 +405,25 @@ def get_lonlat_intersection(geometry1, geometry2):
         does geometry1 intersect with geometry2?
     """
 
-    geometry1c = geometry1.Clone()
-    geometry2c = geometry2.Clone()
-    geometry1 = None
-    geometry2 = None
+    geom_1_cp = geom_1.Clone()
+    geom_2_cp = geom_2.Clone()
+    geom_1 = None
+    geom_2 = None
 
-    if geometry1c.GetGeometryName() == 'MULTIPOLYGON':
-        geometry1c = ogr.ForceToPolygon(geometry1c)
+    if geom_1_cp.GetGeometryName() == "MULTIPOLYGON":
+        geom_1_cp = ogr.ForceToPolygon(geom_1_cp)
         print(
-            'Warning: get_lonlat_intersection(): Take care: Multipolygon is forced to Polygon!'
+            "Warning: get_lonlat_intersection(): Take care: Multipolygon is forced to Polygon!"
         )
 
-    polygons = split_polygon_by_antimeridian(geometry1c)
+    polygons = split_polygon_by_antimeridian(geom_1_cp)
 
-    return polygons.Intersection(geometry2c)
+    return polygons.Intersection(geom_2_cp)
 
 
-def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
+def split_polygon_by_antimeridian(
+    lonlat_polygon: ogr.Geometry, split_limit: float = 150.0
+) -> ogr.Geometry:
     """
     Function that splits a polygon at the antimeridian
     (i.e. the 180 degree dateline)
@@ -393,22 +444,21 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
     """
 
     # prepare the input polygon
-    in_points = lonlat_polygon.GetGeometryRef(0).GetPoints()
-    lons = [p[0] for p in in_points]
+    points = lonlat_polygon.GetGeometryRef(0).GetPoints()
+    lons = [p[0] for p in points]
 
     # case of very long polygon in east-west direction,
     # crossing the Greenwich meridian, but not the antimeridian,
     # which is most probably a wrong interpretion.
     # --> wrapping longitudes to the eastern Hemisphere (adding 360°)
-    if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons))
-                                                 > split_limit):
-        new_points = [(y[0] + 360, y[1]) if y[0] < 0 else y for y in in_points]
-        lonlat_polygon = create_polygon_geometry(
-            new_points, lonlat_polygon.GetSpatialReference(), segment=0.5)
+    if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons)) > split_limit):
+        new_points = [(p[0] + 360, p[1]) if p[0] < 0 else p for p in points]
+        lonlat_polygon = ogr.CreateGeometryFromWkt(shapely.Polygon(new_points).wkt)
+        lonlat_polygon.AssignSpatialReference(get_lonlat_sref())
+        lonlat_polygon = segmentize_geometry(lonlat_polygon, 0.5)
 
     # return input polygon if not cross anti-meridian
-    max_lon = np.max(
-        [p[0] for p in lonlat_polygon.GetGeometryRef(0).GetPoints()])
+    max_lon = np.max([p[0] for p in lonlat_polygon.GetGeometryRef(0).GetPoints()])
     if max_lon <= 180:
         return lonlat_polygon
 
@@ -416,10 +466,9 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
     antimeridian = LineString([(180, -90), (180, 90)])
 
     # use shapely for the splitting
-    merged = linemerge([
-        Polygon(lonlat_polygon.GetBoundary().GetPoints()).boundary,
-        antimeridian
-    ])
+    merged = linemerge(
+        [Polygon(lonlat_polygon.GetBoundary().GetPoints()).boundary, antimeridian]
+    )
     borders = unary_union(merged)
     polygons = polygonize(borders)
 
@@ -430,25 +479,23 @@ def split_polygon_by_antimeridian(lonlat_polygon, split_limit=150.0):
 
     # wrap the longitude coordinates
     # to get only longitudes out out [0, 180] or [-180, 0]
-    for p in polygons:
-
-        point_coords = p.exterior.coords[:]
-        lons = [p[0] for p in point_coords]
+    for polygon in polygons:
+        coords = polygon.exterior.coords[:]
+        lons = [coord[0] for coord in coords]
 
         # all greater than 180° longitude (Western Hemisphere)
-        if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(
-                lons, 180).all()):
-            wrapped_points = [(y[0] - 360, y[1], y[2]) for y in point_coords]
+        if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(lons, 180).all()):
+            wrapped_points = [(coord[0] - 360, coord[1], coord[2]) for coord in coords]
 
         # all less than 180° longitude (Eastern Hemisphere)
-        elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(
-                lons, 180).all()):
-            wrapped_points = point_coords
+        elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(lons, 180).all()):
+            wrapped_points = coords
 
         # crossing the Greenwhich-meridian
-        elif (len(np.unique(np.sign(lons))) >= 2) and (np.mean(np.abs(lons))
-                                                       < split_limit):
-            wrapped_points = point_coords
+        elif (len(np.unique(np.sign(lons))) >= 2) and (
+            np.mean(np.abs(lons)) < split_limit
+        ):
+            wrapped_points = coords
 
         # crossing the Greenwhich-meridian, but should cross the antimeridian
         # (should not be happen actually)

@@ -1,57 +1,49 @@
 from pydantic import BaseModel, NonNegativeInt
 from typing import Optional
-from morecantile.models import Tile as RegularTile
 
 
-import os
 import sys
 import copy
-import warnings
 import cartopy
-import pandas as pd
 import numpy as np
 import shapely
-import json
 import pyproj
 from osgeo import ogr, osr
-from collections import OrderedDict
 import shapely.wkt
-from shapely import affinity
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
-from typing import Tuple, List
+from typing import Tuple
 from matplotlib.patches import Polygon as PolygonPatch
 
 from pytileproj._const import DECIMALS
-from pytileproj.geom import polar_point, transform_geometry, round_polygon_vertices, transform_coords, ij2xy, xy2ij
-
-from geospade.tools import polar_point
-from geospade.tools import is_rectangular
-from geospade.tools import bbox_to_polygon
-from geospade.tools import rasterise_polygon
-from geospade.tools import rel_extent
-from geospade.tools import _round_polygon_coords
-from geospade.transform import build_geotransform
-from geospade.transform import xy2ij
-from geospade.transform import ij2xy
-from geospade.transform import transform_coords
-from geospade.transform import transform_geom
-from geospade.crs import SpatialRef
-from geospade import DECIMALS
+from pytileproj.geom import (
+    transform_geometry,
+    round_polygon_vertices,
+    transform_coords,
+    ij2xy,
+    xy2ij,
+)
 
 
 class IrregularTile(BaseModel):
     id: str
     z: int
     extent: Tuple[float, float, float, float]
-    
+
     _boundary: shapely.Polygon
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         min_x, min_y, max_x, max_y = self.extent
-        self._boundary = shapely.Polygon(((min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, min_y), (min_x, min_y)))
+        self._boundary = shapely.Polygon(
+            (
+                (min_x, min_y),
+                (min_x, max_y),
+                (max_x, max_y),
+                (max_x, min_y),
+                (min_x, min_y),
+            )
+        )
 
     @property
     def boundary(self) -> shapely.Polygon:
@@ -96,10 +88,13 @@ def _align_geom():
             Wrapper function.
 
         """
+
         def wrapper(self: ProjTile, *args, **kwargs):
             geom = args[0]
             geom = geom.boundary_ogr if isinstance(geom, ProjTile) else geom
-            other_sref = geom.GetSpatialReference()  # ogr geometry is assumed to be the first argument
+            other_sref = (
+                geom.GetSpatialReference()
+            )  # ogr geometry is assumed to be the first argument
             if other_sref is None:
                 err_msg = "Spatial reference of the given geometry is not set."
                 raise AttributeError(err_msg)
@@ -116,6 +111,7 @@ def _align_geom():
             return f(self, wrpd_geom, *args[1:], **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -136,11 +132,14 @@ class ProjTile(BaseModel):
         self._boundary = self.__ogr_boundary()
 
     @classmethod
-    def from_extent(cls, extent: Tuple[float, float, float, float], 
-                    epsg: int, 
-                    x_pixel_size: int, 
-                    y_pixel_size: int, 
-                    **kwargs) -> 'ProjTile':
+    def from_extent(
+        cls,
+        extent: Tuple[float, float, float, float],
+        epsg: int,
+        x_pixel_size: int,
+        y_pixel_size: int,
+        **kwargs,
+    ) -> "ProjTile":
         ll_x, ll_y, ur_x, ur_y = extent
         width, height = ur_x - ll_x, ur_y - ll_y
         n_rows = int(round(height / y_pixel_size, DECIMALS))
@@ -152,7 +151,13 @@ class ProjTile(BaseModel):
 
     @classmethod
     @_align_geom
-    def from_geometry(cls, geom: ogr.Geometry, x_pixel_size: int | float, y_pixel_size: int | float, **kwargs) -> 'ProjTile':
+    def from_geometry(
+        cls,
+        geom: ogr.Geometry,
+        x_pixel_size: int | float,
+        y_pixel_size: int | float,
+        **kwargs,
+    ) -> "ProjTile":
         """
         Creates a `ProjTile` object from an existing geometry object.
         Since `ProjTile` can represent rectangles only, non-rectangular
@@ -201,100 +206,100 @@ class ProjTile(BaseModel):
 
     @property
     def is_axis_parallel(self) -> bool:
-        """ True if the `ProjTile` is not rotated , i.e. it is axis-parallel. """
-        return self.ori == 0.
+        """True if the `ProjTile` is not rotated , i.e. it is axis-parallel."""
+        return self.ori == 0.0
 
     @property
     def ll_x(self) -> float:
-        """ X coordinate of the lower left corner. """
+        """X coordinate of the lower left corner."""
         x, _ = self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin)
         return x
 
     @property
     def ll_y(self) -> float:
-        """ Y coordinate of the lower left corner. """
+        """Y coordinate of the lower left corner."""
         _, y = self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin)
         return y
 
     @property
     def ul_x(self) -> float:
-        """ X coordinate of the upper left corner. """
+        """X coordinate of the upper left corner."""
         x, _ = self.rc2xy(0, 0, px_origin=self.px_origin)
         return x
 
     @property
     def ul_y(self) -> float:
-        """ Y coordinate of the upper left corner. """
+        """Y coordinate of the upper left corner."""
         _, y = self.rc2xy(0, 0, px_origin=self.px_origin)
         return y
 
     @property
     def ur_x(self) -> float:
-        """ X coordinate of the upper right corner. """
+        """X coordinate of the upper right corner."""
         x, _ = self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin)
         return x
 
     @property
     def ur_y(self) -> float:
-        """ Y coordinate of the upper right corner. """
+        """Y coordinate of the upper right corner."""
         _, y = self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin)
         return y
 
     @property
     def lr_x(self) -> float:
-        """ X coordinate of the upper right corner. """
+        """X coordinate of the upper right corner."""
         x, _ = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin)
         return x
 
     @property
     def lr_y(self) -> float:
-        """ Y coordinate of the upper right corner. """
+        """Y coordinate of the upper right corner."""
         _, y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin)
         return y
 
     @property
     def x_pixel_size(self) -> float:
-        """ Pixel size in X direction. """
+        """Pixel size in X direction."""
         return np.hypot(self.geotrans[1], self.geotrans[2])
 
     @property
     def y_pixel_size(self) -> float:
-        """ Pixel size in Y direction. """
+        """Pixel size in Y direction."""
         return np.hypot(self.geotrans[4], self.geotrans[5])
 
     @property
     def h_pixel_size(self) -> float:
-        """ Pixel size in W-E direction (equal to `x_pixel_size` if the `ProjTile` is axis-parallel). """
+        """Pixel size in W-E direction (equal to `x_pixel_size` if the `ProjTile` is axis-parallel)."""
         return self.x_pixel_size / np.cos(self.ori)
 
     @property
     def v_pixel_size(self) -> float:
-        """ Pixel size in N-S direction (equal to `y_pixel_size` if the `ProjTile` is axis-parallel). """
+        """Pixel size in N-S direction (equal to `y_pixel_size` if the `ProjTile` is axis-parallel)."""
         return self.y_pixel_size / np.cos(self.ori)
 
     @property
     def x_size(self) -> float:
-        """ Width of the raster geometry in world system coordinates. """
+        """Width of the raster geometry in world system coordinates."""
         return self.n_cols * self.x_pixel_size
 
     @property
     def y_size(self) -> float:
-        """ Height of the raster geometry in world system coordinates. """
+        """Height of the raster geometry in world system coordinates."""
         return self.n_rows * self.y_pixel_size
 
     @property
     def width(self) -> int:
-        """ Width of the raster geometry in pixels. """
+        """Width of the raster geometry in pixels."""
         return self.n_cols
 
     @property
     def height(self) -> int:
-        """ Height of the raster geometry in pixels. """
+        """Height of the raster geometry in pixels."""
         return self.n_rows
 
     @property
     def shape(self) -> Tuple[int, int]:
-        """ Returns the shape of the raster geometry, which is defined by the height and width in pixels. """
+        """Returns the shape of the raster geometry, which is defined by the height and width in pixels."""
         return self.height, self.width
 
     @property
@@ -304,8 +309,12 @@ class ProjTile(BaseModel):
         (min_x, min_y, max_x, max_y).
 
         """
-        return min([self.ll_x, self.ul_x]), min([self.ll_y, self.lr_y]), \
-               max([self.ur_x, self.lr_x]), max([self.ur_y, self.ul_y])
+        return (
+            min([self.ll_x, self.ul_x]),
+            min([self.ll_y, self.lr_y]),
+            max([self.ur_x, self.lr_x]),
+            max([self.ur_y, self.ul_y]),
+        )
 
     @property
     def outer_boundary_extent(self) -> Tuple[float, float, float, float]:
@@ -318,23 +327,32 @@ class ProjTile(BaseModel):
         ur_x, ur_y = self.rc2xy(0, self.n_cols - 1, px_origin="ur")
         lr_x, lr_y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr")
         ul_x, ul_y = self.rc2xy(0, 0, px_origin="ul")
-        return min([ll_x, ul_x]), min([ll_y, lr_y]), max([ur_x, lr_x]), max([ur_y, ul_y])
+        return (
+            min([ll_x, ul_x]),
+            min([ll_y, lr_y]),
+            max([ur_x, lr_x]),
+            max([ur_y, ul_y]),
+        )
 
     @property
     def size(self) -> int:
-        """ Number of pixels covered by the raster geometry. """
+        """Number of pixels covered by the raster geometry."""
         return self.width * self.height
 
     @property
     def centre(self) -> Tuple[float, float]:
-        """ Centre defined by the mass centre of the vertices. """
+        """Centre defined by the mass centre of the vertices."""
         return shapely.wkt.loads(self.boundary.Centroid().ExportToWkt()).coords[0]
 
     @property
-    def outer_boundary_corners(self) -> Tuple[Tuple[float, float],
-                                              Tuple[float, float],
-                                              Tuple[float, float],
-                                              Tuple[float, float]]:
+    def outer_boundary_corners(
+        self,
+    ) -> Tuple[
+        Tuple[float, float],
+        Tuple[float, float],
+        Tuple[float, float],
+        Tuple[float, float],
+    ]:
         """
         4-list of 2-tuples : A tuple containing all corners (convex hull, pixel extent) in a clock-wise order
         (lower left, lower right, upper right, upper left).
@@ -344,31 +362,34 @@ class ProjTile(BaseModel):
         ur_x, ur_y = self.rc2xy(0, self.n_cols - 1, px_origin="ur")
         lr_x, lr_y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr")
         ul_x, ul_y = self.rc2xy(0, 0, px_origin="ul")
-        corner_pts = ((ll_x, ll_y),
-                      (ul_x, ul_y),
-                      (ur_x, ur_y),
-                      (lr_x, lr_y))
+        corner_pts = ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
         return corner_pts
 
     @property
-    def coord_corners(self) -> Tuple[Tuple[float, float],
-                                     Tuple[float, float],
-                                     Tuple[float, float],
-                                     Tuple[float, float]]:
+    def coord_corners(
+        self,
+    ) -> Tuple[
+        Tuple[float, float],
+        Tuple[float, float],
+        Tuple[float, float],
+        Tuple[float, float],
+    ]:
         """
         A tuple containing all corners (convex hull, coordinate extent) in a clock-wise order
         (lower left, lower right, upper right, upper left).
 
         """
-        corner_pts = ((self.ll_x, self.ll_y),
-                      (self.ul_x, self.ul_y),
-                      (self.ur_x, self.ur_y),
-                      (self.lr_x, self.lr_y))
+        corner_pts = (
+            (self.ll_x, self.ll_y),
+            (self.ul_x, self.ul_y),
+            (self.ur_x, self.ur_y),
+            (self.lr_x, self.lr_y),
+        )
         return corner_pts
 
     @property
     def x_coords(self) -> np.ndarray:
-        """ Returns all coordinates in X direction. """
+        """Returns all coordinates in X direction."""
         if self.is_axis_parallel:
             min_x, _ = self.rc2xy(0, 0)
             max_x, _ = self.rc2xy(0, self.n_cols)
@@ -379,7 +400,7 @@ class ProjTile(BaseModel):
 
     @property
     def y_coords(self) -> np.ndarray:
-        """ Returns all coordinates in Y direction. """
+        """Returns all coordinates in Y direction."""
         if self.is_axis_parallel:
             _, min_y = self.rc2xy(self.n_rows, 0)
             _, max_y = self.rc2xy(0, 0)
@@ -390,30 +411,33 @@ class ProjTile(BaseModel):
 
     @property
     def xy_coords(self) -> Tuple[np.ndarray, np.ndarray]:
-        """ Returns meshgrid of both coordinates X and Y. """
+        """Returns meshgrid of both coordinates X and Y."""
         if self.is_axis_parallel:
-            x_coords, y_coords = np.meshgrid(self.x_coords, self.y_coords, indexing='ij')
+            x_coords, y_coords = np.meshgrid(
+                self.x_coords, self.y_coords, indexing="ij"
+            )
         else:
-            rows, cols = np.meshgrid(np.arange(self.n_rows), np.arange(self.n_cols), indexing='ij')
+            rows, cols = np.meshgrid(
+                np.arange(self.n_rows), np.arange(self.n_cols), indexing="ij"
+            )
             x_coords, y_coords = self.rc2xy(rows, cols)
 
         return x_coords, y_coords
 
     @property
     def boundary_ogr(self) -> ogr.Geometry:
-        """ Returns OGR geometry representation of the boundary of a `ProjTile`. """
+        """Returns OGR geometry representation of the boundary of a `ProjTile`."""
         return self._boundary
 
     @property
     def boundary_wkt(self) -> str:
-        """ Returns Well Known Text (WKT) representation of the boundary of a `ProjTile`. """
+        """Returns Well Known Text (WKT) representation of the boundary of a `ProjTile`."""
         return self._boundary.ExportToWkt()
 
     @property
     def boundary_shapely(self) -> shapely.geometry.Polygon:
-        """ Boundary of the raster geometry represented as a Shapely polygon. """
+        """Boundary of the raster geometry represented as a Shapely polygon."""
         return shapely.wkt.loads(self._boundary.ExportToWkt())
-
 
     @_align_geom
     def intersects(self, other) -> bool:
@@ -437,7 +461,7 @@ class ProjTile(BaseModel):
         return self._boundary.Intersects(other)
 
     @_align_geom
-    def touches(self, other: 'ProjTile' | ogr.Geometry) -> bool:
+    def touches(self, other: "ProjTile" | ogr.Geometry) -> bool:
         """
         Evaluates if this `ProjTile` instance and another geometry touch each other.
 
@@ -455,10 +479,12 @@ class ProjTile(BaseModel):
             True if both geometries touch each other, false if not.
 
         """
-        return round_polygon_vertices(self._boundary, DECIMALS).Touches(round_polygon_vertices(other, DECIMALS))
+        return round_polygon_vertices(self._boundary, DECIMALS).Touches(
+            round_polygon_vertices(other, DECIMALS)
+        )
 
     @_align_geom
-    def within(self, other: 'ProjTile' | ogr.Geometry) -> bool:
+    def within(self, other: "ProjTile" | ogr.Geometry) -> bool:
         """
         Evaluates if the raster geometry is fully within another geometry.
 
@@ -479,7 +505,7 @@ class ProjTile(BaseModel):
         return self._boundary.Within(other)
 
     @_align_geom
-    def overlaps(self, other: 'ProjTile' | ogr.Geometry) -> bool:
+    def overlaps(self, other: "ProjTile" | ogr.Geometry) -> bool:
         """
         Evaluates if a geometry overlaps with the raster geometry.
 
@@ -499,7 +525,9 @@ class ProjTile(BaseModel):
         """
         return self._boundary.Overlaps(other)
 
-    def xy2rc(self, x: float, y: float, epsg: int = None, px_origin: str = None) -> Tuple[int, int]:
+    def xy2rc(
+        self, x: float, y: float, epsg: int = None, px_origin: str = None
+    ) -> Tuple[int, int]:
         """
         Calculates an index of a pixel in which a given point of a world system lies.
 
@@ -573,8 +601,19 @@ class ProjTile(BaseModel):
         px_origin = self.px_origin if px_origin is None else px_origin
         return ij2xy(c, r, self.geotrans, origin=px_origin)
 
-    def plot(self, ax=None, facecolor='tab:red', edgecolor='black', edgewidth=1, alpha=1., proj=None,
-             show=False, label_geom=False, add_country_borders=True, extent=None):
+    def plot(
+        self,
+        ax=None,
+        facecolor="tab:red",
+        edgecolor="black",
+        edgewidth=1,
+        alpha=1.0,
+        proj=None,
+        show=False,
+        label_geom=False,
+        add_country_borders=True,
+        extent=None,
+    ):
         """
         Plots the boundary of the raster geometry on a map.
 
@@ -610,7 +649,7 @@ class ProjTile(BaseModel):
 
         """
 
-        if 'matplotlib' in sys.modules:
+        if "matplotlib" in sys.modules:
             import matplotlib.pyplot as plt
         else:
             err_msg = "Module 'matplotlib' is mandatory for plotting a ProjTile object."
@@ -631,8 +670,15 @@ class ProjTile(BaseModel):
             ax.coastlines()
             ax.add_feature(cartopy.feature.BORDERS)
 
-        patch = PolygonPatch(list(self.boundary_shapely.exterior.coords), facecolor=facecolor, alpha=alpha,
-                            zorder=0, edgecolor=edgecolor, linewidth=edgewidth, transform=this_proj)
+        patch = PolygonPatch(
+            list(self.boundary_shapely.exterior.coords),
+            facecolor=facecolor,
+            alpha=alpha,
+            zorder=0,
+            edgecolor=edgecolor,
+            linewidth=edgewidth,
+            transform=this_proj,
+        )
         ax.add_patch(patch)
 
         if extent is not None:
@@ -641,26 +687,33 @@ class ProjTile(BaseModel):
 
         if self.name is not None and label_geom:
             transform = this_proj._as_mpl_transform(ax)
-            ax.annotate(str(self.name), xy=self.centre, xycoords=transform, va="center", ha="center")
+            ax.annotate(
+                str(self.name),
+                xy=self.centre,
+                xycoords=transform,
+                va="center",
+                ha="center",
+            )
 
         if show:
             plt.show()
 
         return ax
 
-
     def __ogr_boundary(self) -> ogr.Geometry:
-        """ ogr.Geometry : Outer boundary of the raster geometry as an OGR polygon. """
+        """ogr.Geometry : Outer boundary of the raster geometry as an OGR polygon."""
         boundary = Polygon(self.outer_boundary_corners)
         # doing a double WKT conversion to prevent precision issues nearby machine epsilon
-        boundary_ogr = ogr.CreateGeometryFromWkt(ogr.CreateGeometryFromWkt(boundary.wkt).ExportToWkt())
+        boundary_ogr = ogr.CreateGeometryFromWkt(
+            ogr.CreateGeometryFromWkt(boundary.wkt).ExportToWkt()
+        )
         sref = osr.SpatialReference()
         sref.ImportFromEPSG(self.epsg)
         boundary_ogr.AssignSpatialReference(sref)
 
         return boundary_ogr
 
-    def __eq__(self, other: 'ProjTile') -> bool:
+    def __eq__(self, other: "ProjTile") -> bool:
         """
         Checks if this and another raster geometry are equal.
         Equality holds true if the vertices, rows and columns are the same.
@@ -676,11 +729,17 @@ class ProjTile(BaseModel):
             True if both raster geometries are the same, otherwise false.
 
         """
-        this_corners = np.around(np.array(self.outer_boundary_corners), decimals=DECIMALS)
-        other_corners = np.around(np.array(other.outer_boundary_corners), decimals=DECIMALS)
-        return np.all(this_corners == other_corners) and \
-               self.n_rows == other.n_rows and \
-               self.n_cols == other.n_cols
+        this_corners = np.around(
+            np.array(self.outer_boundary_corners), decimals=DECIMALS
+        )
+        other_corners = np.around(
+            np.array(other.outer_boundary_corners), decimals=DECIMALS
+        )
+        return (
+            np.all(this_corners == other_corners)
+            and self.n_rows == other.n_rows
+            and self.n_cols == other.n_cols
+        )
 
     def __ne__(self, other) -> bool:
         """
@@ -702,7 +761,7 @@ class ProjTile(BaseModel):
         return not self == other
 
     def __str__(self) -> str:
-        """ Representation of a raster geometry as a Well Known Text (WKT) string. """
+        """Representation of a raster geometry as a Well Known Text (WKT) string."""
         return self.boundary_wkt
 
     def __deepcopy__(self, memo) -> "ProjTile":
@@ -727,5 +786,5 @@ class ProjTile(BaseModel):
         return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pass

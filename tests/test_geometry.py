@@ -17,6 +17,7 @@
 """
 Tests for the geometry module of pytielproj.
 """
+
 import unittest
 
 from pytileproj.geom import split_polygon_by_antimeridian
@@ -25,26 +26,27 @@ from pytileproj.geom import setup_test_geom_spitzbergen
 
 
 class TestGeometry(unittest.TestCase):
-
     def test_split_polygon_by_antimeridian(self):
-
         # intersect with antimeridian
         poly_siberia_alaska = setup_test_geom_siberia_alaska()
 
         result = split_polygon_by_antimeridian(poly_siberia_alaska)
 
-        self.assertAlmostEqual(poly_siberia_alaska.Area() * 2,
-                               result.GetGeometryRef(0).Area() +
-                               result.GetGeometryRef(1).Area() +
-                               result.Area(),
-                               places=6)
+        self.assertAlmostEqual(
+            poly_siberia_alaska.Area() * 2,
+            result.GetGeometryRef(0).Area()
+            + result.GetGeometryRef(1).Area()
+            + result.Area(),
+            places=6,
+        )
 
         # no intersect with antimeridian
         geom_spitzbergen = setup_test_geom_spitzbergen()
 
         result = split_polygon_by_antimeridian(geom_spitzbergen)
 
-        self.assertAlmostEqual(geom_spitzbergen.Area() * 2,
-                               result.GetGeometryRef(0).Area() +
-                               result.Area(),
-                               places=6)
+        self.assertAlmostEqual(
+            geom_spitzbergen.Area() * 2,
+            result.GetGeometryRef(0).Area() + result.Area(),
+            places=6,
+        )
