@@ -28,6 +28,9 @@ classifiers = [
 [project.urls]
 Repository = "https://github.com/TUW-GEO/pytileproj"
 
+[project.optional-dependencies]
+vis = ["matplotlib", "cartopy"]
+
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"

@@ -1,33 +1,31 @@
-from pydantic import BaseModel, NonNegativeInt
-from typing import Optional
-
-
 import sys
-import copy
+from typing import Union
+
 import cartopy
 import numpy as np
-import shapely
 import pyproj
-from osgeo import ogr, osr
+import shapely
 import shapely.wkt
-from shapely.geometry import Polygon
-from typing import Tuple
 from matplotlib.patches import Polygon as PolygonPatch
+from osgeo import ogr, osr
+from pydantic import BaseModel, NonNegativeInt
+from shapely.geometry import Polygon
 
 from pytileproj._const import DECIMALS
 from pytileproj.geom import (
-    transform_geometry,
+    ij2xy,
     round_polygon_vertices,
     transform_coords,
-    ij2xy,
+    transform_geometry,
     xy2ij,
 )
+from pytileproj.utils import pyproj_to_cartopy_crs
 
 
 class IrregularTile(BaseModel):
     id: str
     z: int
-    extent: Tuple[float, float, float, float]
+    extent: tuple[float, float, float, float]
 
     _boundary: shapely.Polygon
 
@@ -89,7 +87,7 @@ def _align_geom():
 
         """
 
-        def wrapper(self: ProjTile, *args, **kwargs):
+        def wrapper(self: "ProjTile", *args, **kwargs):
             geom = args[0]
             geom = geom.boundary_ogr if isinstance(geom, ProjTile) else geom
             other_sref = (
@@ -105,6 +103,8 @@ def _align_geom():
                 this_sref.ImportFromEPSG(self.epsg)
                 if not this_sref.IsSame(other_sref):
                     wrpd_geom = transform_geometry(geom, this_sref)
+                else:
+                    wrpd_geom = geom
             else:
                 wrpd_geom = geom
 
@@ -119,8 +119,15 @@ class ProjTile(BaseModel):
     epsg: NonNegativeInt
     n_rows: NonNegativeInt
     n_cols: NonNegativeInt
-    geotrans: Optional[Tuple[float, float, float, float, float]] = (0, 1, 0, 0, 0, -1)
-    px_origin: Optional[str] = "ul"
+    geotrans: tuple[float, float, float, float, float, float] | None = (
+        0,
+        1,
+        0,
+        0,
+        0,
+        -1,
+    )
+    px_origin: str | None = "ul"
     name: str | None = None
 
     _boundary: ogr.Geometry
@@ -134,7 +141,7 @@ class ProjTile(BaseModel):
     @classmethod
     def from_extent(
         cls,
-        extent: Tuple[float, float, float, float],
+        extent: tuple[float, float, float, float],
         epsg: int,
         x_pixel_size: int,
         y_pixel_size: int,
@@ -147,10 +154,10 @@ class ProjTile(BaseModel):
         ul_x, ul_y = ll_x, ll_y + n_rows * y_pixel_size
         geotrans = (ul_x, x_pixel_size, 0, ul_y, 0, -y_pixel_size)
 
-        return cls(n_rows, n_cols, epsg, geotrans=geotrans, **kwargs)
+        return cls(n_rows=n_rows, n_cols=n_cols, epsg=epsg, geotrans=geotrans, **kwargs)
 
     @classmethod
-    @_align_geom
+    @_align_geom()
     def from_geometry(
         cls,
         geom: ogr.Geometry,
@@ -188,7 +195,7 @@ class ProjTile(BaseModel):
 
         """
 
-        epsg = geom.GetSpatialReference().ExportToEpsg()
+        epsg = pyproj.CRS(geom.GetSpatialReference().ExportToWkt()).to_epsg()
 
         geom_ch = geom.ConvexHull()
         geom_sh = shapely.wkt.loads(geom_ch.ExportToWkt())
@@ -298,12 +305,12 @@ class ProjTile(BaseModel):
         return self.n_rows
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """Returns the shape of the raster geometry, which is defined by the height and width in pixels."""
         return self.height, self.width
 
     @property
-    def coord_extent(self) -> Tuple[float, float, float, float]:
+    def coord_extent(self) -> tuple[float, float, float, float]:
         """
         Extent of the raster geometry with the pixel origins defined during initialisation
         (min_x, min_y, max_x, max_y).
@@ -317,7 +324,7 @@ class ProjTile(BaseModel):
         )
 
     @property
-    def outer_boundary_extent(self) -> Tuple[float, float, float, float]:
+    def outer_boundary_extent(self) -> tuple[float, float, float, float]:
         """
         Outer extent of the raster geometry containing every pixel
         (min_x, min_y, max_x, max_y).
@@ -340,18 +347,18 @@ class ProjTile(BaseModel):
         return self.width * self.height
 
     @property
-    def centre(self) -> Tuple[float, float]:
+    def centre(self) -> tuple[float, float]:
         """Centre defined by the mass centre of the vertices."""
-        return shapely.wkt.loads(self.boundary.Centroid().ExportToWkt()).coords[0]
+        return shapely.wkt.loads(self._boundary.Centroid().ExportToWkt()).coords[0]
 
     @property
     def outer_boundary_corners(
         self,
-    ) -> Tuple[
-        Tuple[float, float],
-        Tuple[float, float],
-        Tuple[float, float],
-        Tuple[float, float],
+    ) -> tuple[
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
     ]:
         """
         4-list of 2-tuples : A tuple containing all corners (convex hull, pixel extent) in a clock-wise order
@@ -368,11 +375,11 @@ class ProjTile(BaseModel):
     @property
     def coord_corners(
         self,
-    ) -> Tuple[
-        Tuple[float, float],
-        Tuple[float, float],
-        Tuple[float, float],
-        Tuple[float, float],
+    ) -> tuple[
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
     ]:
         """
         A tuple containing all corners (convex hull, coordinate extent) in a clock-wise order
@@ -410,7 +417,7 @@ class ProjTile(BaseModel):
             return self.rc2xy(rows, 0)[1]
 
     @property
-    def xy_coords(self) -> Tuple[np.ndarray, np.ndarray]:
+    def xy_coords(self) -> tuple[np.ndarray, np.ndarray]:
         """Returns meshgrid of both coordinates X and Y."""
         if self.is_axis_parallel:
             x_coords, y_coords = np.meshgrid(
@@ -439,7 +446,7 @@ class ProjTile(BaseModel):
         """Boundary of the raster geometry represented as a Shapely polygon."""
         return shapely.wkt.loads(self._boundary.ExportToWkt())
 
-    @_align_geom
+    @_align_geom()
     def intersects(self, other) -> bool:
         """
         Evaluates if this `ProjTile` instance and another geometry intersect.
@@ -460,8 +467,8 @@ class ProjTile(BaseModel):
         """
         return self._boundary.Intersects(other)
 
-    @_align_geom
-    def touches(self, other: "ProjTile" | ogr.Geometry) -> bool:
+    @_align_geom()
+    def touches(self, other: Union["ProjTile", ogr.Geometry]) -> bool:
         """
         Evaluates if this `ProjTile` instance and another geometry touch each other.
 
@@ -483,8 +490,8 @@ class ProjTile(BaseModel):
             round_polygon_vertices(other, DECIMALS)
         )
 
-    @_align_geom
-    def within(self, other: "ProjTile" | ogr.Geometry) -> bool:
+    @_align_geom()
+    def within(self, other: Union["ProjTile", ogr.Geometry]) -> bool:
         """
         Evaluates if the raster geometry is fully within another geometry.
 
@@ -504,8 +511,8 @@ class ProjTile(BaseModel):
         """
         return self._boundary.Within(other)
 
-    @_align_geom
-    def overlaps(self, other: "ProjTile" | ogr.Geometry) -> bool:
+    @_align_geom()
+    def overlaps(self, other: Union["ProjTile", ogr.Geometry]) -> bool:
         """
         Evaluates if a geometry overlaps with the raster geometry.
 
@@ -527,7 +534,7 @@ class ProjTile(BaseModel):
 
     def xy2rc(
         self, x: float, y: float, epsg: int = None, px_origin: str = None
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """
         Calculates an index of a pixel in which a given point of a world system lies.
 
@@ -569,7 +576,7 @@ class ProjTile(BaseModel):
         c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
         return r, c
 
-    def rc2xy(self, r: int, c: int, px_origin: str = None) -> Tuple[float, float]:
+    def rc2xy(self, r: int, c: int, px_origin: str = None) -> tuple[float, float]:
         """
         Returns the coordinates of the center or a corner (depending on ˋpx_originˋ) of a pixel specified
         by a row and column number.
@@ -655,7 +662,7 @@ class ProjTile(BaseModel):
             err_msg = "Module 'matplotlib' is mandatory for plotting a ProjTile object."
             raise ImportError(err_msg)
 
-        this_proj = self.sref.to_cartopy_proj()
+        this_proj = pyproj_to_cartopy_crs(self._crs)
         if proj is None:
             other_proj = this_proj
         else:
@@ -712,6 +719,17 @@ class ProjTile(BaseModel):
         boundary_ogr.AssignSpatialReference(sref)
 
         return boundary_ogr
+
+    @_align_geom()
+    def __contains__(self, geom: ogr.Geometry) -> bool:
+        geom_sref = geom.GetSpatialReference()
+        this_sref = osr.SpatialReference()
+        this_sref.ImportFromEPSG(self.epsg)
+        if not this_sref.IsSame(geom_sref):
+            err_msg = "The spatial reference systems are not equal."
+            raise ValueError(err_msg)
+
+        return geom.Within(self._boundary)
 
     def __eq__(self, other: "ProjTile") -> bool:
         """
@@ -775,15 +793,20 @@ class ProjTile(BaseModel):
         Returns
         -------
         ProjTile
-            Deepcopy of a raster geometry.
+            Deepcopy of a projected tile.
 
         """
-        cls = self.__class__
-        result = cls.__new__(cls)
-        memo[id(self)] = result
-        for k, v in self.__dict__.items():
-            setattr(result, k, copy.deepcopy(v, memo))
-        return result
+
+        proj_tile_cp = ProjTile(
+            epsg=self.epsg,
+            n_rows=self.n_rows,
+            n_cols=self.n_cols,
+            geotrans=self.geotrans,
+            px_origin=self.px_origin,
+            name=self.name,
+        )
+
+        return proj_tile_cp
 
 
 if __name__ == "__main__":
