@@ -1,10 +1,8 @@
-from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
+from pytileproj._version import __commit__, __version__
 
-try:
-    # Change here if project is renamed and does not equal the package name
-    dist_name = __name__
-    __version__ = version(dist_name)
-except PackageNotFoundError:  # pragma: no cover
-    __version__ = "unknown"
-finally:
-    del version, PackageNotFoundError
+__all__ = [
+    "__commit__",
+    "__version__",
+]
+
+name = "pytileproj"
