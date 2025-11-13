@@ -29,23 +29,24 @@
 Code for Tiled Projection Systems.
 """
 
-from morecantile.models import TileMatrix
-from pydantic import BaseModel, AfterValidator, NonNegativeFloat, NonNegativeInt
-from typing import Annotated, Literal, Optional, Tuple, List, Dict
-import shapely
+from typing import Annotated, Literal
+
 import numpy as np
+import shapely
+from morecantile.models import Tile as RegularTile, TileMatrix
+from pydantic import AfterValidator, BaseModel, NonNegativeFloat, NonNegativeInt
 from shapely.geometry import Polygon
 
-from pytileproj.tile import RegularTile, IrregularTile
+from pytileproj.tile import IrregularTile
 
 
 class RegularGrid(BaseModel, arbitrary_types_allowed=True):
     name: str
-    extent: Tuple[float, float, float, float]
+    extent: tuple[float, float, float, float]
     sampling: NonNegativeFloat
-    origin_xy: Tuple[float, float]
-    tile_shape_px: Tuple[NonNegativeInt, NonNegativeInt]
-    axis_orientation: Optional[Tuple[Literal["W", "E"], Literal["N", "S"]]] = ("E", "N")
+    tile_shape_px: tuple[NonNegativeInt, NonNegativeInt]
+    tiling_level: int | None = 0
+    axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
 
     _tm: TileMatrix
 
@@ -69,9 +70,18 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
             tileHeight=self.tile_shape_px[1],
             matrixWidth=matrix_width,
             matrixHeight=matrix_height,
-            id=self.name,
+            id=str(self.tiling_level),
             title=self.name,
         )
+
+    @property
+    def origin_xy(self) -> tuple:
+        if self.axis_orientation[1] == "N":
+            origin_xy = (self.extent[0], self.extent[1])
+        else:
+            origin_xy = (self.extent[0], self.extent[3])
+
+        return origin_xy
 
     @property
     def n_tiles(self) -> int:
@@ -82,8 +92,8 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
         return self._tm
 
     def __iter__(self):
-        for x in range(self._tm.matrixHeight):
-            for y in range(self._tm.matrixWidth):
+        for x in range(self._tm.matrixWidth):
+            for y in range(self._tm.matrixHeight):
                 yield RegularTile(x, y, self.tiling_level)
 
     def to_ogc_repr(self) -> dict:
@@ -99,12 +109,13 @@ def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
     return input
 
 
-class IrregularGrid(BaseModel):
+class IrregularGrid(BaseModel, arbitrary_types_allowed=True):
     name: str
-    tiles: Dict[IrregularTile]
+    tiles: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
         np.ndarray | None, AfterValidator(validate_adj_matrix)
     ] = None
+    tiling_level: int | None = 0
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -112,17 +123,17 @@ class IrregularGrid(BaseModel):
             self.adjacency_matrix = self._build_adjacency_matrix()
 
     @property
-    def tile_ids(self) -> List[str]:
+    def tile_ids(self) -> list[str]:
         return list(self.tiles.keys())
 
-    def neighbours(self, tile_id: str) -> List[IrregularTile]:
+    def neighbours(self, tile_id: str) -> list[IrregularTile]:
         tile_idx = self.tile_ids.index(tile_id)
         nbr_idxs = self.adjacency_matrix[tile_idx, :]
-        nbr_tiles = [self[self.tile_ids[nbr_idx]] for nbr_idx in nbr_idxs]
+        nbr_tiles = [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
         return nbr_tiles
 
-    def tiles_in_bbox(self, bbox: tuple[float, float, float, float]):
+    def tiles_intersecting_bbox(self, bbox: tuple[float, float, float, float]):
         min_x, min_y, max_x, max_y = bbox
         bbox = Polygon(
             [
@@ -143,17 +154,16 @@ class IrregularGrid(BaseModel):
         for i in range(n_tiles):
             for j in range(i, n_tiles):
                 if i != j:
-                    tile_i = self.tiles[self.tiles_ids[i]]
-                    tile_j = self.tiles[self.tiles_ids[j]]
-                    if shapely.touches(tile_i.boundary(), tile_j.boundary()):
+                    tile_i = self.tiles[self.tile_ids[i]]
+                    tile_j = self.tiles[self.tile_ids[j]]
+                    if shapely.touches(tile_i.boundary, tile_j.boundary):
                         adjacency_matrix[i, j] = True
                         adjacency_matrix[j, i] = True
 
         return adjacency_matrix
 
     def __iter__(self):
-        for tile in self.tiles:
-            yield tile
+        yield from self.tiles.values()
 
     def __getitem__(self, tile_id: str) -> IrregularTile:
         return self.tiles[tile_id]

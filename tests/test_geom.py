@@ -1,10 +1,15 @@
 import math
 
+import numpy as np
 import pytest
 import shapely
 from osgeo import ogr
 
-from pytileproj.geom import get_geog_sref, split_polygon_by_antimeridian
+from pytileproj.geom import (
+    get_geog_sref,
+    rasterise_polygon,
+    split_polygon_by_antimeridian,
+)
 
 
 @pytest.fixture
@@ -55,3 +60,40 @@ def test_split_polygon_by_am_spitzbergen(poly_spitzbergen):
         result.GetGeometryRef(0).Area() + result.Area(),
         rel_tol=1e-6,
     )
+
+
+def test_rasterise_polygon():
+    ref_raster = np.array(
+        [
+            [0, 0, 0, 0, 1, 1, 0, 0],
+            [0, 0, 0, 1, 1, 1, 0, 0],
+            [0, 0, 1, 1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 1, 0, 0],
+        ]
+    )
+    ref_raster = np.array(ref_raster)
+    poly_pts = [(1, 1), (1, 4), (5, 8), (6, 8), (6, 5), (8, 3), (6, 1), (1, 1)]
+    geom = shapely.Polygon(poly_pts)
+    raster = rasterise_polygon(geom, 1, 1)
+    assert np.all(raster == ref_raster)
+
+    ref_raster = np.array(
+        [
+            [1, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 0, 0, 1, 1],
+            [1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+        ]
+    )
+    ref_raster = np.array(ref_raster)
+    poly_pts = [(1, 1), (1, 7), (5, 3), (8, 6), (8, 1), (1, 1)]
+    geom = shapely.Polygon(poly_pts)
+    raster = rasterise_polygon(geom, 1, 1)
+    assert np.all(raster == ref_raster)
