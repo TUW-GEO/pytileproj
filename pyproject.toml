@@ -1,7 +1,64 @@
+[project]
+authors = [{ name = "TU Wien", email = "remote.sensing@geo.tuwien.ac.at" }]
+name = "pytileproj"
+dynamic = ["version"]
+description = "Framework for working with hierarchical, projected tiling systems."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic",
+    "gdal",
+    "pyproj",
+    "shapely",
+    "morecantile >= 6.2",
+    "requests",
+    "pillow"
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX",
+    "Natural Language :: English",
+]
+[project.urls]
+Repository = "https://github.com/TUW-GEO/pytileproj"
+
 [build-system]
-# AVOID CHANGING REQUIRES: IT WILL BE UPDATED BY PYSCAFFOLD!
-requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+test = [
+    "pytest",
+    "pytest-cov"
+]
+trunk = []
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+skip-string-normalization = false
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+lint.select = ["E", "F", "I", "B", "UP", "N"]
+lint.ignore = [
+  "E501", # ignore line length warnings because Black handles that
+]
+
+# Optional: autofix simple issues when running `ruff check --fix`
+fix = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["pytileproj"]
+combine-as-imports = true
 
 [tool.setuptools_scm]
 # For smarter version schemes and other configuration options,
