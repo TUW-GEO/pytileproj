@@ -1,18 +1,19 @@
-from morecantile.models import TileMatrixSet
-from pydantic import BaseModel, AfterValidator, NonNegativeInt
-from typing import Annotated, Optional, Tuple, List
-import pyproj
-from osgeo import ogr
 import json
 from pathlib import Path
+from typing import Annotated
+
 import numpy as np
+import pyproj
+from morecantile.models import TileMatrixSet
+from osgeo import ogr
+from pydantic import AfterValidator, BaseModel, NonNegativeInt
 
-from pytileproj.tile import ProjTile, RegularTile, IrregularTile
-from pytileproj.geom import get_lonlat_sref, transform_geom_to_geog, rasterise_polygon
-from pytileproj.grid import RegularGrid, IrregularGrid
+from pytileproj.geom import get_geog_sref, rasterise_polygon, transform_geom_to_geog
+from pytileproj.grid import IrregularGrid, RegularGrid
+from pytileproj.tile import IrregularTile, ProjTile, RegularTile
 
 
-def validate_grids(grids: List[RegularGrid] | None) -> List[RegularGrid] | None:
+def validate_grids(grids: list[RegularGrid] | None) -> list[RegularGrid] | None:
     if grids is not None:
         ref_grid = grids[0]
         for grid in grids[1:]:
@@ -72,7 +73,7 @@ class ProjSystemBase(BaseModel):
     def _lonlat_inside_proj(self, lon: float, lat: float) -> bool:
         point = ogr.Geometry(ogr.wkbPoint)
         point.AddPoint(lon, lat)
-        point.AssignSpatialReference(get_lonlat_sref())
+        point.AssignSpatialReference(get_geog_sref())
 
         return point.Within(self._proj_zone)
 
@@ -95,7 +96,7 @@ class ProjSystemBase(BaseModel):
 
 class GridSystemBase(BaseModel):
     name: str
-    grids: List[RegularGrid | IrregularGrid]
+    grids: list[RegularGrid | IrregularGrid]
 
     @classmethod
     def from_file(cls, json_path: Path):
@@ -118,12 +119,12 @@ class GridSystemBase(BaseModel):
     def _tilenames_at_level(self, tiling_level: int):
         grid = self[tiling_level]
         for tile in grid:
-            yield self._create_tilename(tile)
+            yield from self._create_tilename(tile)
 
     def _tiles_at_level(self, tiling_level: int):
         grid = self[tiling_level]
         for tile in grid:
-            yield tile
+            yield from tile
 
     def __len__(self) -> int:
         return len(self.grids)
@@ -166,7 +167,7 @@ class ProjGridSystemBase(GridSystemBase, ProjSystemBase):
 
 
 class RegularProjGridSystem(ProjGridSystemBase):
-    grids: Annotated[List[RegularGrid], AfterValidator(validate_grids)]
+    grids: Annotated[list[RegularGrid], AfterValidator(validate_grids)]
 
     _tms: TileMatrixSet
 
@@ -197,9 +198,9 @@ class RegularProjGridSystem(ProjGridSystemBase):
         cls,
         name: str,
         epsg: int,
-        extent: Tuple[float, float, float, float],
-        tile_shape_px: Tuple[NonNegativeInt, NonNegativeInt],
-        tiling_level_limits: Optional[Tuple[NonNegativeInt, NonNegativeInt]] = (0, 24),
+        extent: tuple[float, float, float, float],
+        tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
+        tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] | None = (0, 24),
     ) -> "RegularProjGridSystem":
         min_zoom, max_zoom = tiling_level_limits
         tms = TileMatrixSet.custom(

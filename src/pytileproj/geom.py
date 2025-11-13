@@ -30,27 +30,21 @@ Code for osgeo geometry operations.
 """
 
 import warnings
+
 import numpy as np
-import shapely
-from PIL import Image, ImageDraw
-
-from osgeo import ogr
-from osgeo import osr
-from typing import Tuple
 import pyproj
+import shapely
+from osgeo import ogr, osr
+from PIL import Image, ImageDraw
+from shapely.geometry import LineString, Polygon
+from shapely.ops import linemerge, polygonize, unary_union
 
-from shapely.geometry import Polygon
-from shapely.geometry import LineString
-from shapely.ops import linemerge
-from shapely.ops import unary_union
-from shapely.ops import polygonize
-
-from pytileproj._const import DEFAULT_TILE_SEG_NUM, DECIMALS
+from pytileproj._const import DECIMALS, DEFAULT_TILE_SEG_NUM
 
 
 def xy2ij(
-    x: float, y: float, geotrans: Tuple, origin: str = "ul"
-) -> Tuple[int | np.ndarray, int | np.ndarray]:
+    x: float, y: float, geotrans: tuple, origin: str = "ul"
+) -> tuple[int | np.ndarray, int | np.ndarray]:
     """
     Transforms global/world system coordinates to pixel coordinates/indexes.
 
@@ -89,10 +83,8 @@ def xy2ij(
 
     px_shift = px_shift_map.get(origin, None)
     if px_shift is None:
-        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead.".format(
-            origin
-        )
-        warnings.warn(wrng_msg)
+        wrng_msg = f"Pixel origin '{origin}' unknown. Upper left origin 'ul' will be taken instead."
+        warnings.warn(wrng_msg, stacklevel=1)
         px_shift = (0, 0)
 
     # shift world system coordinates to the desired pixel origin
@@ -131,8 +123,8 @@ def xy2ij(
 
 
 def ij2xy(
-    i: int, j: int, geotrans: Tuple, origin: str = "ul"
-) -> Tuple[float | np.ndarray, float | np.ndarray]:
+    i: int, j: int, geotrans: tuple, origin: str = "ul"
+) -> tuple[float | np.ndarray, float | np.ndarray]:
     """
     Transforms global/world system coordinates to pixel coordinates/indexes.
 
@@ -171,10 +163,8 @@ def ij2xy(
 
     px_shift = px_shift_map.get(origin, None)
     if px_shift is None:
-        wrng_msg = "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead".format(
-            origin
-        )
-        warnings.warn(wrng_msg)
+        wrng_msg = f"Pixel origin '{origin}' unknown. Upper left origin 'ul' will be taken instead"
+        warnings.warn(wrng_msg, stacklevel=1)
         px_shift = (0, 0)
 
     # shift pixel coordinates to the desired pixel origin
@@ -190,7 +180,7 @@ def ij2xy(
 
 def transform_coords(
     x: float, y: float, this_crs: pyproj.CRS, other_crs: pyproj.CRS
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     traffo = pyproj.Transformer.from_crs(this_crs, other_crs, always_xy=True)
     return traffo.transform(x, y)
 
@@ -271,7 +261,7 @@ def transform_geometry(
     return geometry_out
 
 
-def get_lonlat_sref() -> osr.SpatialReference:
+def get_geog_sref() -> osr.SpatialReference:
     sref = osr.SpatialReference()
     sref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     sref.ImportFromEPSG(4326)
@@ -280,14 +270,14 @@ def get_lonlat_sref() -> osr.SpatialReference:
 
 
 def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
-    return transform_geometry(geom, get_lonlat_sref(), segment=DEFAULT_TILE_SEG_NUM)
+    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_TILE_SEG_NUM)
 
 
 def rasterise_polygon(
     geom: shapely.Polygon,
     x_pixel_size: int | float,
     y_pixel_size: int | float,
-    extent: Tuple = None,
+    extent: tuple = None,
 ) -> np.ndarray:
     """
     Rasterises a Shapely polygon defined by a clockwise list of points.
@@ -323,7 +313,7 @@ def rasterise_polygon(
     geom_pts = list(geom.exterior.coords)
 
     # split tuple points into x and y coordinates
-    xs, ys = list(zip(*geom_pts))
+    xs, ys = list(zip(*geom_pts, strict=False))
 
     # round coordinates to upper-left corner
     xs = (
@@ -352,7 +342,9 @@ def rasterise_polygon(
     mask_img = Image.new("1", (n_cols, n_rows), 0)
     rows = (np.around(np.abs(ys - y_max) / y_pixel_size, decimals=DECIMALS)).astype(int)
     cols = (np.around(np.abs(xs - x_min) / x_pixel_size, decimals=DECIMALS)).astype(int)
-    ImageDraw.Draw(mask_img).polygon(list(zip(cols, rows)), outline=1, fill=1)
+    ImageDraw.Draw(mask_img).polygon(
+        list(zip(cols, rows, strict=False)), outline=1, fill=1
+    )
     mask_ar = np.array(mask_img).astype(np.uint8)
 
     return mask_ar
@@ -454,7 +446,7 @@ def split_polygon_by_antimeridian(
     if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons)) > split_limit):
         new_points = [(p[0] + 360, p[1]) if p[0] < 0 else p for p in points]
         lonlat_polygon = ogr.CreateGeometryFromWkt(shapely.Polygon(new_points).wkt)
-        lonlat_polygon.AssignSpatialReference(get_lonlat_sref())
+        lonlat_polygon.AssignSpatialReference(get_geog_sref())
         lonlat_polygon = segmentize_geometry(lonlat_polygon, 0.5)
 
     # return input polygon if not cross anti-meridian
@@ -474,7 +466,7 @@ def split_polygon_by_antimeridian(
 
     # setup OGR multipolygon
     splitted_polygons = ogr.Geometry(ogr.wkbMultiPolygon)
-    geo_sr = get_lonlat_sref()
+    geo_sr = get_geog_sref()
     splitted_polygons.AssignSpatialReference(geo_sr)
 
     # wrap the longitude coordinates
@@ -485,7 +477,7 @@ def split_polygon_by_antimeridian(
 
         # all greater than 180° longitude (Western Hemisphere)
         if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(lons, 180).all()):
-            wrapped_points = [(coord[0] - 360, coord[1], coord[2]) for coord in coords]
+            wrapped_points = [(coord[0] - 360, coord[1]) for coord in coords]
 
         # all less than 180° longitude (Eastern Hemisphere)
         elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(lons, 180).all()):
