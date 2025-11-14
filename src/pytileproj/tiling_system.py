@@ -1,9 +1,14 @@
 import json
+import sys
 from pathlib import Path
 from typing import NamedTuple
 
+import cartopy.crs as ccrs
+import cartopy.feature
 import numpy as np
 import pyproj
+import shapely.wkt
+from matplotlib.patches import Polygon as PolygonPatch
 from morecantile.models import Tile as RegularTile, TileMatrixSet
 from osgeo import ogr, osr
 from pydantic import BaseModel, NonNegativeInt, model_validator
@@ -16,7 +21,7 @@ from pytileproj.geom import (
 )
 from pytileproj.tile import IrregularTile, ProjTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
-from pytileproj.utils import fetch_proj_zone
+from pytileproj.utils import fetch_proj_zone, pyproj_to_cartopy_crs
 
 
 class ProjCoord(NamedTuple):
@@ -153,6 +158,17 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
     def create_tile(self, tilename: str) -> ProjTile:
         raise NotImplementedError
 
+    def _to_proj_tile(
+        self, tile: RegularTile | IrregularTile, name: str = None
+    ) -> ProjTile:
+        raise NotImplementedError
+
+    def _tile_in_zone(self, tile: ProjTile) -> bool:
+        tile_in_zone = True
+        if self.tiles_in_zone_only:
+            tile_in_zone = tile.boundary_ogr.Intersect(self._proj_zone_native)
+        return tile_in_zone
+
     def get_tile_bbox_geog(self, tilename: str) -> ogr.Geometry:
         proj_tile = self.create_tile(tilename)
         return transform_geom_to_geog(proj_tile.boundary_ogr)
@@ -184,6 +200,104 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
             )[:-1, :-1]
 
         return mask
+
+    def plot(
+        self,
+        ax=None,
+        tiling_level: int = 0,
+        facecolor: str = "tab:red",
+        edgecolor: str = "black",
+        edgewidth: int = 1,
+        alpha: float = 1.0,
+        proj: ccrs.CRS = None,
+        show: bool = False,
+        label_tile: bool = False,
+        add_country_borders: bool = True,
+        extent: tuple = None,
+        plot_zone: bool = False,
+    ):
+        if "matplotlib" in sys.modules:
+            import matplotlib.pyplot as plt
+        else:
+            err_msg = "Module 'matplotlib' is mandatory for plotting a ProjTilingSystem object."
+            raise ImportError(err_msg)
+
+        this_proj = pyproj_to_cartopy_crs(pyproj.CRS.from_epsg(self.epsg))
+        if proj is None:
+            other_proj = this_proj
+        else:
+            other_proj = proj
+
+        if ax is None:
+            ax = plt.axes(projection=other_proj)
+            ax.set_global()
+            ax.gridlines()
+
+        if add_country_borders:
+            ax.coastlines()
+            ax.add_feature(cartopy.feature.BORDERS)
+
+        for tile in self[tiling_level]:
+            tilename = self._create_tilename(tile)
+            proj_tile = self._to_proj_tile(tile, tilename)
+            if self._tile_in_zone(proj_tile):
+                patch = PolygonPatch(
+                    list(proj_tile.boundary_shapely.exterior.coords),
+                    facecolor=facecolor,
+                    alpha=alpha,
+                    zorder=0,
+                    edgecolor=edgecolor,
+                    linewidth=edgewidth,
+                    transform=this_proj,
+                )
+                ax.add_patch(patch)
+
+                if label_tile:
+                    transform = this_proj._as_mpl_transform(ax)
+                    ax.annotate(
+                        proj_tile.name,
+                        xy=proj_tile.centre,
+                        xycoords=transform,
+                        va="center",
+                        ha="center",
+                    )
+
+        if extent is not None:
+            ax.set_xlim([extent[0], extent[2]])
+            ax.set_ylim([extent[1], extent[3]])
+
+        if plot_zone:
+            transform = this_proj._as_mpl_transform(ax)
+            zone_boundary = shapely.wkt.loads(self._proj_zone_native.ExportToWkt())
+            x_coords_bound, y_coords_bound = [], []
+            if isinstance(zone_boundary, shapely.MultiPolygon):
+                for poly in zone_boundary.geoms:
+                    x_coords_bound, y_coords_bound = list(
+                        zip(*poly.exterior.coords, strict=False)
+                    )
+                    ax.plot(
+                        x_coords_bound,
+                        y_coords_bound,
+                        color="k",
+                        linewidth=2,
+                        transform=transform,
+                    )
+            else:
+                x_coords_bound, y_coords_bound = list(
+                    zip(*zone_boundary.exterior.coords, strict=False)
+                )
+                ax.plot(
+                    x_coords_bound,
+                    y_coords_bound,
+                    color="k",
+                    linewidth=2,
+                    transform=transform,
+                )
+
+        if show:
+            plt.show()
+
+        return ax
 
     def __contains__(self, geom: ProjTile | ogr.Geometry) -> bool:
         if isinstance(geom, ProjTile):
@@ -258,7 +372,8 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
 
     @property
     def axis_orientation(self) -> tuple[str, str]:
-        return self[0].axis_orientation
+        def_tiling_level = self.tiling_levels[0]
+        return self[def_tiling_level].axis_orientation
 
     @property
     def max_n_tiles_x(self) -> int:
@@ -320,7 +435,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         tile = self._create_tile(tilename)
         proj_tile = self._to_proj_tile(tile, name=tilename)
         if self.tiles_in_zone_only:
-            if not proj_tile.boundary_ogr.Intersect(self._proj_zone_native):
+            if not self._tile_in_zone(proj_tile):
                 proj_tile = None
 
         return proj_tile
@@ -341,7 +456,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             tilename = self._create_tilename(tile)
             proj_tile = self._to_proj_tile(tile, name=tilename)
             if self.tiles_in_zone_only:
-                if not proj_tile.boundary_ogr.Intersect(self._proj_zone_native):
+                if not self._tile_in_zone(proj_tile):
                     continue
 
             yield proj_tile

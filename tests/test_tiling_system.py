@@ -1,4 +1,5 @@
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -207,6 +208,11 @@ def test_allowed_samplings(e7eu_grid_t1: RegularTiling):
         epsg=27704,
         allowed_samplings={new_grid.tiling_level: allowed_samplings},
     )
+
+
+def test_plot(e7eu_rpsb):
+    if "matplotlib" in sys.modules:
+        e7eu_rpsb.plot()
 
 
 if __name__ == "__main__":
