@@ -14,8 +14,8 @@ from pytileproj.geom import (
     transform_geom_to_geog,
     transform_geometry,
 )
-from pytileproj.grid import IrregularGrid, RegularGrid
 from pytileproj.tile import IrregularTile, ProjTile
+from pytileproj.tiling import IrregularTiling, RegularTiling
 from pytileproj.utils import fetch_proj_zone
 
 
@@ -85,28 +85,28 @@ class ProjSystemBase(BaseModel):
 
 
 def validate_samplings(
-    grids: dict[int, RegularGrid | IrregularGrid],
+    tilings: dict[int, RegularTiling | IrregularTiling],
     allowed_samplings: dict[int, list[int | float]] | None,
 ):
     if allowed_samplings is not None:
-        tiling_levels = sorted(grids.keys())
+        tiling_levels = sorted(tilings.keys())
         for tiling_level in tiling_levels:
-            grid = grids[tiling_level]
+            tiling = tilings[tiling_level]
             samplings_tl = allowed_samplings.get(tiling_level, [])
-            if samplings_tl and grid.sampling not in samplings_tl:
+            if samplings_tl and tiling.sampling not in samplings_tl:
                 raise ValueError(
-                    f"Grid {grid.name}'s sampling {grid.sampling} at {tiling_level} is not allowed. The following samplings are allowed: {', '.join(map(str, samplings_tl))}"
+                    f"Grid {tiling.name}'s sampling {tiling.sampling} at {tiling_level} is not allowed. The following samplings are allowed: {', '.join(map(str, samplings_tl))}"
                 )
 
 
-class GridSystemBase(BaseModel):
+class TilingSystemBase(BaseModel):
     name: str
-    grids: dict[int, RegularGrid | IrregularGrid]
+    tilings: dict[int, RegularTiling | IrregularTiling]
     allowed_samplings: dict[int, list[int | float]] | None = None
 
     @model_validator(mode="after")
-    def check_samplings(self) -> "GridSystemBase":
-        validate_samplings(self.grids, self.allowed_samplings)
+    def check_samplings(self) -> "TilingSystemBase":
+        validate_samplings(self.tilings, self.allowed_samplings)
         return self
 
     @classmethod
@@ -123,7 +123,7 @@ class GridSystemBase(BaseModel):
 
     @property
     def tiling_levels(self) -> list[int]:
-        return list(self.grids.keys())
+        return list(self.tilings.keys())
 
     def _create_tilename(self, tile: RegularTile | IrregularTile) -> str:
         raise NotImplementedError
@@ -132,22 +132,22 @@ class GridSystemBase(BaseModel):
         raise NotImplementedError
 
     def _tilenames_at_level(self, tiling_level: int):
-        grid = self[tiling_level]
-        for tile in grid:
+        tiling = self[tiling_level]
+        for tile in tiling:
             yield self._create_tilename(tile)
 
     def _tiles_at_level(self, tiling_level: int):
-        grid = self[tiling_level]
-        yield from grid
+        tiling = self[tiling_level]
+        yield from tiling
 
     def __len__(self) -> int:
-        return len(self.grids)
+        return len(self.tilings)
 
-    def __getitem__(self, tiling_level: int) -> RegularGrid:
-        return self.grids[tiling_level]
+    def __getitem__(self, tiling_level: int) -> RegularTiling:
+        return self.tilings[tiling_level]
 
 
-class ProjGridSystemBase(GridSystemBase, ProjSystemBase):
+class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
     tiles_in_zone_only: bool = True
 
     def create_tile(self, tilename: str) -> ProjTile:
@@ -164,7 +164,7 @@ class ProjGridSystemBase(GridSystemBase, ProjSystemBase):
 
     def tile_mask(self, proj_tile: ProjTile) -> np.ndarray:
         if proj_tile.epsg != self.epsg:
-            raise ValueError("Projection of tile and grid system must match.")
+            raise ValueError("Projection of tile and tiling system must match.")
 
         intrsct_geom = self._proj_zone_native.Intersection(proj_tile.boundary_ogr)
         if intrsct_geom.Area() == 0.0:
@@ -194,48 +194,48 @@ class ProjGridSystemBase(GridSystemBase, ProjSystemBase):
         return super().__contains__(arg)
 
 
-def validate_grids(grids: dict[int, RegularGrid], congruent: bool):
-    tiling_levels = sorted(grids.keys())
-    ref_grid = grids[tiling_levels[0]]
+def validate_tilings(tilings: dict[int, RegularTiling], congruent: bool):
+    tiling_levels = sorted(tilings.keys())
+    ref_tiling = tilings[tiling_levels[0]]
     for tiling_level in tiling_levels[1:]:
-        grid = grids[tiling_level]
+        tiling = tilings[tiling_level]
 
-        same_origin = ref_grid.origin_xy == grid.origin_xy
+        same_origin = ref_tiling.origin_xy == tiling.origin_xy
         if not same_origin and congruent:
             raise ValueError(
-                f"The given grids do not have the same origin: {ref_grid.tiling_level}:{ref_grid.origin_xy} vs. {grid.tiling_level}:{grid.origin_xy}"
+                f"The given tilings do not have the same origin: {ref_tiling.tiling_level}:{ref_tiling.origin_xy} vs. {tiling.tiling_level}:{tiling.origin_xy}"
             )
 
-        same_extent = ref_grid.extent == grid.extent
+        same_extent = ref_tiling.extent == tiling.extent
         if not same_extent and congruent:
             raise ValueError(
-                f"The given grids do not have the same extent: {ref_grid.tiling_level}:{ref_grid.extent} vs. {grid.tiling_level}:{grid.extent}"
+                f"The given tilings do not have the same extent: {ref_tiling.tiling_level}:{ref_tiling.extent} vs. {tiling.tiling_level}:{tiling.extent}"
             )
 
-        same_orientation = ref_grid.axis_orientation == grid.axis_orientation
+        same_orientation = ref_tiling.axis_orientation == tiling.axis_orientation
         if not same_orientation:
             raise ValueError(
-                f"The given grids do not have the same axis orientation: {ref_grid.tiling_level}:{ref_grid.axis_orientation} vs. {grid.tiling_level}:{grid.axis_orientation}"
+                f"The given tilings do not have the same axis orientation: {ref_tiling.tiling_level}:{ref_tiling.axis_orientation} vs. {tiling.tiling_level}:{tiling.axis_orientation}"
             )
 
-        ref_n_rows, ref_n_cols = ref_grid.tm.matrixHeight, ref_grid.tm.matrixWidth
-        n_rows, n_cols = grid.tm.matrixHeight, grid.tm.matrixWidth
+        ref_n_rows, ref_n_cols = ref_tiling.tm.matrixHeight, ref_tiling.tm.matrixWidth
+        n_rows, n_cols = tiling.tm.matrixHeight, tiling.tm.matrixWidth
 
         if (ref_n_rows >= n_rows) or (ref_n_cols >= n_cols):
             raise ValueError(
-                f"The given grids do not grow with increasing tiling level: {ref_grid.tiling_level} ({ref_n_rows},{ref_n_cols}) vs.{tiling_level} ({n_rows},{n_cols})."
+                f"The given tilings do not grow with increasing tiling level: {ref_tiling.tiling_level} ({ref_n_rows},{ref_n_cols}) vs.{tiling_level} ({n_rows},{n_cols})."
             )
 
         if congruent:
             if (n_rows % ref_n_rows != 0) or (n_cols % ref_n_cols != 0):
                 raise ValueError(
-                    f"The given tiles in the grids are not congruent: {ref_grid.tiling_level} ({ref_n_rows},{ref_n_cols}) vs.{tiling_level} ({n_rows},{n_cols})."
+                    f"The given tiles in the tilings are not congruent: {ref_tiling.tiling_level} ({ref_n_rows},{ref_n_cols}) vs.{tiling_level} ({n_rows},{n_cols})."
                 )
 
-        ref_grid = grid
+        ref_tiling = tiling
 
 
-class RegularProjGridSystem(ProjGridSystemBase):
+class RegularProjTilingSystem(ProjTilingSystemBase):
     congruent: bool | None = False
 
     _tms: TileMatrixSet
@@ -246,14 +246,14 @@ class RegularProjGridSystem(ProjGridSystemBase):
         self._tms = TileMatrixSet(
             crs={"wkt": wkt},
             tileMatrices=[
-                self.grids[tiling_level].tm
+                self.tilings[tiling_level].tm
                 for tiling_level in sorted(self.tiling_levels)
             ],
         )
 
     @model_validator(mode="after")
-    def check_grids(self) -> "RegularProjGridSystem":
-        validate_grids(self.grids, self.congruent)
+    def check_tilings(self) -> "RegularProjTilingSystem":
+        validate_tilings(self.tilings, self.congruent)
         return self
 
     @property
@@ -281,7 +281,7 @@ class RegularProjGridSystem(ProjGridSystemBase):
         extent: tuple[float, float, float, float],
         tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
         tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] | None = (0, 24),
-    ) -> "RegularProjGridSystem":
+    ) -> "RegularProjTilingSystem":
         min_zoom, max_zoom = tiling_level_limits
         tms = TileMatrixSet.custom(
             extent,
@@ -291,16 +291,16 @@ class RegularProjGridSystem(ProjGridSystemBase):
             minzoom=min_zoom,
             maxzoom=max_zoom,
         )
-        grids = []
+        tilings = []
         for i, tm in enumerate(tms.tileMatrices):
-            grid = RegularGrid(
+            tiling = RegularTiling(
                 name=str(i),
                 extent=tms.bbox,
                 sampling=tm.cellSize,
             )
-            grids.append(grid)
+            tilings.append(tiling)
 
-        return cls(name, epsg, grids)
+        return cls(name, epsg, tilings)
 
     def _create_tilename(self, tile: RegularTile) -> str:
         x_ori, y_ori = self.axis_orientation
@@ -347,7 +347,7 @@ class RegularProjGridSystem(ProjGridSystemBase):
             yield proj_tile
 
 
-class IrregularProjGridSystem(ProjGridSystemBase):
+class IrregularProjTilingSystem(ProjTilingSystemBase):
     def _create_tilename(self, tile: IrregularTile) -> str:
         return tile.id
 

@@ -46,7 +46,7 @@ class CornerOfOrigin(Enum):
     top_left = "topLeft"
 
 
-class RegularGrid(BaseModel, arbitrary_types_allowed=True):
+class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     name: str
     extent: tuple[float, float, float, float]
     sampling: NonNegativeFloat
@@ -74,7 +74,7 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=CornerOfOrigin.top_left.value,  # unfortunately, this value is hardcoded within morecantile (see )
+            cornerOfOrigin=CornerOfOrigin.top_left.value,  # unfortunately, this value is hardcoded within morecantile (see https://github.com/developmentseed/morecantile/issues/189)
             pointOfOrigin=self.origin_xy,
             tileWidth=self.tile_shape_px[0],
             tileHeight=self.tile_shape_px[1],
@@ -122,7 +122,7 @@ def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
     return input
 
 
-class IrregularGrid(BaseModel, arbitrary_types_allowed=True):
+class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     name: str
     tiles: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
