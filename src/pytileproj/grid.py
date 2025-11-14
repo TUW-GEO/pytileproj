@@ -29,6 +29,7 @@
 Code for Tiled Projection Systems.
 """
 
+from enum import Enum
 from typing import Annotated, Literal
 
 import numpy as np
@@ -38,6 +39,11 @@ from pydantic import AfterValidator, BaseModel, NonNegativeFloat, NonNegativeInt
 from shapely.geometry import Polygon
 
 from pytileproj.tile import IrregularTile
+
+
+class CornerOfOrigin(Enum):
+    bottom_left = "bottomLeft"
+    top_left = "topLeft"
 
 
 class RegularGrid(BaseModel, arbitrary_types_allowed=True):
@@ -53,7 +59,11 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        corner_of_ori = "bottomLeft" if self.axis_orientation[1] == "N" else "topLeft"
+        self.axis_orientation = (
+            "E",
+            "S",
+        )  # hardcoded because of the cornerOfOrigin issue below
+
         matrix_width = int(
             (self.extent[2] - self.extent[0]) / (self.tile_shape_px[0] * self.sampling)
         )
@@ -64,7 +74,7 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=corner_of_ori,
+            cornerOfOrigin=CornerOfOrigin.top_left.value,  # unfortunately, this value is hardcoded within morecantile (see )
             pointOfOrigin=self.origin_xy,
             tileWidth=self.tile_shape_px[0],
             tileHeight=self.tile_shape_px[1],
@@ -75,13 +85,16 @@ class RegularGrid(BaseModel, arbitrary_types_allowed=True):
         )
 
     @property
-    def origin_xy(self) -> tuple:
-        if self.axis_orientation[1] == "N":
-            origin_xy = (self.extent[0], self.extent[1])
-        else:
-            origin_xy = (self.extent[0], self.extent[3])
+    def corner_of_origin(self) -> CornerOfOrigin:
+        return (
+            CornerOfOrigin.bottom_left
+            if self.axis_orientation[1] == "N"
+            else CornerOfOrigin.top_left
+        )
 
-        return origin_xy
+    @property
+    def origin_xy(self) -> tuple:
+        return self.extent[0], self.extent[3]
 
     @property
     def n_tiles(self) -> int:

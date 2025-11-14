@@ -1,0 +1,212 @@
+import math
+from pathlib import Path
+
+import numpy as np
+import pytest
+from morecantile.models import Tile
+from osgeo import osr
+
+from pytileproj.grid import RegularGrid
+from pytileproj.grid_system import (
+    GridSystemBase,
+    ProjGridSystemBase,
+    ProjSystemBase,
+    RegularProjGridSystem,
+)
+from pytileproj.tile import ProjTile
+
+osr.UseExceptions()
+
+
+@pytest.fixture(scope="module")
+def e7eu_grid_t1():
+    return RegularGrid(
+        name="e7eut1",
+        extent=[0, 0, 8660000, 6020000],
+        sampling=10,
+        tile_shape_px=(10000, 10000),
+        tiling_level=1,
+    )
+
+
+@pytest.fixture(scope="module")
+def e7eu_grid_t3():
+    return RegularGrid(
+        name="e7eut3",
+        extent=[0, 0, 8660000, 6020000],
+        sampling=20,
+        tile_shape_px=(15000, 15000),
+        tiling_level=0,
+    )
+
+
+@pytest.fixture(scope="module")
+def e7eu_grid_invalid():
+    return RegularGrid(
+        name="e7_invalid",
+        extent=[0, 0, 300000, 300000],
+        sampling=20,
+        tile_shape_px=(15000, 15000),
+        tiling_level=2,
+    )
+
+
+@pytest.fixture(scope="module")
+def e7eu_psb(e7eu_grid_t1: RegularGrid, e7eu_grid_t3: RegularGrid):
+    return ProjGridSystemBase(
+        name="e7eu",
+        grids={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
+        epsg=27704,
+    )
+
+
+@pytest.fixture(scope="module")
+def e7eu_rpsb(e7eu_grid_t1: RegularGrid, e7eu_grid_t3: RegularGrid):
+    return RegularProjGridSystem(
+        name="e7eu",
+        grids={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
+        epsg=27704,
+    )
+
+
+def test_projsystembase():
+    e7eu = ProjSystemBase(epsg=27704)
+
+    lon, lat = 16.37, 48.19
+    e7_coord = e7eu.lonlat_to_xy(lon, lat)
+    geog_coord_2 = e7eu.xy_to_lonlat(e7_coord.x, e7_coord.y)
+    assert math.isclose(geog_coord_2.x, lon, rel_tol=0.01) and math.isclose(
+        geog_coord_2.y, lat, rel_tol=0.01
+    )
+
+    lon, lat = 0, 0
+    e7_coord = e7eu.lonlat_to_xy(lon, lat)
+    assert e7_coord is None
+
+
+def test_gridsystembase(e7eu_grid_t1: RegularGrid, e7eu_grid_t3: RegularGrid):
+    grids = {grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]}
+    gsb = GridSystemBase(name="e7eu", grids=grids)
+
+    assert len(gsb) == 2
+
+    json_path = Path("gsb.json")
+    gsb.to_file(json_path)
+    gsb2 = GridSystemBase.from_file(json_path)
+
+    assert gsb[0].to_ogc_repr() == gsb2[0].to_ogc_repr()
+    assert gsb[1].to_ogc_repr() == gsb2[1].to_ogc_repr()
+
+    json_path.unlink()
+
+
+def test_projgridsystembase_tile(e7eu_psb: ProjGridSystemBase):
+    e7_tile = ProjTile.from_extent([3700000, 2300000, 3800000, 2400000], 27704, 10, 10)
+    assert e7_tile in e7eu_psb
+
+
+def test_projgridsystembase_mask(e7eu_psb: ProjGridSystemBase):
+    e7_tile = ProjTile.from_extent([3700000, 2300000, 3800000, 2400000], 27704, 10, 10)
+    tile_mask = e7eu_psb.tile_mask(e7_tile)
+    assert np.array_equal(tile_mask, np.ones((10000, 10000)))
+
+    e7_tile = ProjTile.from_extent([0, 0, 100000, 100000], 27704, 10, 10)
+    tile_mask = e7eu_psb.tile_mask(e7_tile)
+    assert np.array_equal(tile_mask, np.zeros((10000, 10000)))
+
+
+def test_reg_pgs_invalid(
+    e7eu_grid_t1: RegularGrid, e7eu_grid_t3: RegularGrid, e7eu_grid_invalid: RegularGrid
+):
+    grids = {
+        grid.tiling_level: grid
+        for grid in [e7eu_grid_t1, e7eu_grid_t3, e7eu_grid_invalid]
+    }
+    try:
+        _ = RegularProjGridSystem(name="e7eu", grids=grids, epsg=27704)
+        raise AssertionError()
+    except ValueError:
+        assert True
+
+
+def test_reg_pgs_tile_conv(e7eu_rpsb: RegularProjGridSystem):
+    tilename_1 = e7eu_rpsb._create_tilename(Tile(x=37, y=23, z=0))
+    tile = e7eu_rpsb._create_tile(tilename_1)
+    tilename_2 = e7eu_rpsb._create_tilename(tile)
+    assert tilename_1 == tilename_2
+
+
+def test_reg_pgs_proj_tile_conv(e7eu_rpsb: RegularProjGridSystem):
+    tile = Tile(x=37, y=23, z=1)
+    tilename_1 = e7eu_rpsb._create_tilename(tile)
+    proj_tile = e7eu_rpsb.create_tile(tilename_1)
+    assert proj_tile.name == "E37S23T1"
+    assert proj_tile.shape == (10000, 10000)
+    assert proj_tile.geotrans == (
+        e7eu_rpsb[0].origin_xy[0] + 10000 * 10 * tile.x,
+        10.0,
+        0.0,
+        e7eu_rpsb[0].origin_xy[1] - 10000 * 10 * tile.y,
+        0.0,
+        -10.0,
+    )
+
+
+def test_congruency(e7eu_grid_t1: RegularGrid, e7eu_grid_t3: RegularGrid):
+    try:
+        _ = RegularProjGridSystem(
+            name="e7eu",
+            grids={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
+            epsg=27704,
+            congruent=True,
+        )
+        raise AssertionError
+    except ValueError:
+        assert True
+
+    new_grid = RegularGrid(
+        name="e7eut3",
+        extent=[0, 0, 8660000, 6020000],
+        sampling=20,
+        tile_shape_px=(10000, 10000),
+        tiling_level=0,
+    )
+    _ = RegularProjGridSystem(
+        name="e7eu",
+        grids={grid.tiling_level: grid for grid in [e7eu_grid_t1, new_grid]},
+        epsg=27704,
+        congruent=True,
+    )
+
+
+def test_allowed_samplings(e7eu_grid_t1: RegularGrid):
+    allowed_samplings = [1, 5]
+    try:
+        _ = RegularProjGridSystem(
+            name="e7eu",
+            grids={e7eu_grid_t1.tiling_level: e7eu_grid_t1},
+            epsg=27704,
+            allowed_samplings={e7eu_grid_t1.tiling_level: allowed_samplings},
+        )
+        raise AssertionError
+    except ValueError:
+        assert True
+
+    new_grid = RegularGrid(
+        name="e7eut3",
+        extent=[0, 0, 8660000, 6020000],
+        sampling=5,
+        tile_shape_px=(10000, 10000),
+        tiling_level=0,
+    )
+    _ = RegularProjGridSystem(
+        name="e7eu",
+        grids={new_grid.tiling_level: new_grid},
+        epsg=27704,
+        allowed_samplings={new_grid.tiling_level: allowed_samplings},
+    )
+
+
+if __name__ == "__main__":
+    pass
+    # test_reg_pgs_tile_conv(e7eu_rpsb(e7eu_grid_t1(), e7eu_grid_t3()))

@@ -8,7 +8,7 @@ from pytileproj.tile import IrregularTile
 osr.UseExceptions()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def reg_grid():
     return RegularGrid(
         name="grid", extent=[0, 0, 180, 90], sampling=1, tile_shape_px=(10, 10)
@@ -27,7 +27,7 @@ def irreg_grid():
 
 
 def test_reg_ori(reg_grid: RegularGrid):
-    assert reg_grid.origin_xy == (0, 0)
+    assert reg_grid.origin_xy == (0, 90)
 
 
 def test_reg_grid(reg_grid: RegularGrid):
@@ -53,8 +53,8 @@ def test_to_ogc(reg_grid: RegularGrid):
         "id": "0",
         "scaleDenominator": 3571.4285714285716,
         "cellSize": 1.0,
-        "cornerOfOrigin": "bottomLeft",
-        "pointOfOrigin": (0.0, 0.0),
+        "cornerOfOrigin": "topLeft",
+        "pointOfOrigin": (0.0, 90.0),
         "tileWidth": 10,
         "tileHeight": 10,
         "matrixWidth": 18,
