@@ -34,7 +34,7 @@ class ProjSystemBase(BaseModel):
     epsg: int
 
     _proj_zone_geog: ogr.Geometry
-    _proj_zone_native: ogr.Geometry
+    _proj_zone: ogr.Geometry
     _to_geog: pyproj.Transformer
     _from_geog: pyproj.Transformer
 
@@ -49,7 +49,12 @@ class ProjSystemBase(BaseModel):
         self._proj_zone_geog = fetch_proj_zone(self.epsg)
         sref = osr.SpatialReference()
         sref.ImportFromEPSG(self.epsg)
-        self._proj_zone_native = transform_geometry(self._proj_zone_geog, sref)
+        proj_zone_faulty = transform_geometry(self._proj_zone_geog, sref)
+        # buffer of 0 removes wrap-arounds along the anti-meridian
+        proj_zone = shapely.buffer(shapely.wkt.loads(proj_zone_faulty.ExportToWkt()), 0)
+        proj_zone = ogr.CreateGeometryFromWkt(proj_zone.wkt)
+        proj_zone.AssignSpatialReference(sref)
+        self._proj_zone = proj_zone
 
     def _lonlat_inside_proj(self, lon: float, lat: float) -> bool:
         point = ogr.Geometry(ogr.wkbPoint)
@@ -166,7 +171,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
     def _tile_in_zone(self, tile: ProjTile) -> bool:
         tile_in_zone = True
         if self.tiles_in_zone_only:
-            tile_in_zone = tile.boundary_ogr.Intersect(self._proj_zone_native)
+            tile_in_zone = tile.boundary_ogr.Intersect(self._proj_zone)
         return tile_in_zone
 
     def get_tile_bbox_geog(self, tilename: str) -> ogr.Geometry:
@@ -182,7 +187,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         if proj_tile.epsg != self.epsg:
             raise ValueError("Projection of tile and tiling system must match.")
 
-        intrsct_geom = self._proj_zone_native.Intersection(proj_tile.boundary_ogr)
+        intrsct_geom = self._proj_zone.Intersection(proj_tile.boundary_ogr)
         if intrsct_geom.Area() == 0.0:
             mask = np.zeros(proj_tile.shape, dtype=np.uint8)
         elif proj_tile in self:
@@ -268,7 +273,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
         if plot_zone:
             transform = this_proj._as_mpl_transform(ax)
-            zone_boundary = shapely.wkt.loads(self._proj_zone_native.ExportToWkt())
+            zone_boundary = shapely.wkt.loads(self._proj_zone.ExportToWkt())
             x_coords_bound, y_coords_bound = [], []
             if isinstance(zone_boundary, shapely.MultiPolygon):
                 for poly in zone_boundary.geoms:
@@ -478,7 +483,7 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         tile = self._create_tile(tilename)
         proj_tile = self._to_proj_tile(tile, name=tilename)
         if self.tiles_in_zone_only:
-            if not proj_tile.boundary_ogr.Intersect(self._proj_zone_native):
+            if not proj_tile.boundary_ogr.Intersect(self._proj_zone):
                 proj_tile = None
 
         return proj_tile
@@ -499,7 +504,7 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
             tilename = self._create_tilename(tile)
             proj_tile = self._to_proj_tile(tile, name=tilename)
             if self.tiles_in_zone_only:
-                if not proj_tile.boundary_ogr.Intersect(self._proj_zone_native):
+                if not proj_tile.boundary_ogr.Intersect(self._proj_zone):
                     continue
 
             yield proj_tile
