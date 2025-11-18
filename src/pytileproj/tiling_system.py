@@ -1,7 +1,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import NamedTuple
+from typing import Annotated, NamedTuple
 
 import cartopy.crs as ccrs
 import cartopy.feature
@@ -11,7 +11,7 @@ import shapely.wkt
 from matplotlib.patches import Polygon as PolygonPatch
 from morecantile.models import Tile as RegularTile, TileMatrixSet
 from osgeo import ogr, osr
-from pydantic import BaseModel, NonNegativeInt, model_validator
+from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
 from pytileproj.geom import (
     get_geog_sref,
@@ -30,8 +30,31 @@ class ProjCoord(NamedTuple):
     epsg: int
 
 
-class ProjSystemBase(BaseModel):
+def convert_proj_zone_geog(
+    input: Path | shapely.Polygon | ogr.Geometry | None,
+) -> ogr.Geometry | None:
+    if isinstance(input, Path):
+        with open(input) as f:
+            geojson = json.load(f)
+        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, shapely.Polygon):
+        proj_zone_geog = ogr.CreateGeometryFromWkt(input.wkt)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, ogr.Geometry):
+        proj_zone_geog = input
+    else:
+        proj_zone_geog = None
+
+    return proj_zone_geog
+
+
+class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
     epsg: int
+    proi_zone_geog: Annotated[
+        Path | shapely.Polygon | ogr.Geometry | None,
+        AfterValidator(convert_proj_zone_geog),
+    ] = None
 
     _proj_zone_geog: ogr.Geometry
     _proj_zone: ogr.Geometry
@@ -46,7 +69,7 @@ class ProjSystemBase(BaseModel):
         self._from_geog = pyproj.Transformer.from_crs(
             geog_crs, this_crs, always_xy=True
         )
-        self._proj_zone_geog = fetch_proj_zone(self.epsg)
+        self._proj_zone_geog = self.proi_zone_geog or fetch_proj_zone(self.epsg)
         sref = osr.SpatialReference()
         sref.ImportFromEPSG(self.epsg)
         proj_zone_faulty = transform_geometry(self._proj_zone_geog, sref)
@@ -78,6 +101,11 @@ class ProjSystemBase(BaseModel):
             coord = None
 
         return coord
+
+    def export_proj_zone_geog(self, path: Path):
+        geojson = self._proj_zone_geog.ExportToJson()
+        with open(path, "w") as f:
+            f.writelines(geojson)
 
     def __contains__(self, geom: ogr.Geometry) -> bool:
         other_sref = geom.GetSpatialReference()

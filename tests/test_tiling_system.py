@@ -215,6 +215,16 @@ def test_plot(e7eu_rpsb):
         e7eu_rpsb.plot()
 
 
+def test_proj_zone_geog_io():
+    e7eu_ref = ProjSystemBase(epsg=27704)
+    json_path = Path("test_proj_zone_geog.json")
+    e7eu_ref.export_proj_zone_geog(json_path)
+
+    e7eu = ProjSystemBase(epsg=27704, proj_zone_geog=json_path)
+    json_path.unlink()
+
+    assert e7eu._proj_zone_geog.ExportToWkt() == e7eu_ref._proj_zone_geog.ExportToWkt()
+
+
 if __name__ == "__main__":
     pass
-    # test_reg_pgs_tile_conv(e7eu_rpsb(e7eu_grid_t1(), e7eu_grid_t3()))

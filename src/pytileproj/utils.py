@@ -4,8 +4,10 @@ import warnings
 import cartopy.crs as ccrs
 import pyproj
 import requests
-from osgeo import ogr, osr
+from osgeo import ogr
 from shapely.geometry import MultiPolygon, Polygon
+
+from pytileproj.geom import get_geog_sref
 
 
 def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
@@ -35,10 +37,7 @@ def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
                 else:
                     raise ValueError(f"Geometry type '{geom_type}' not supported.")
                 zone_geom = ogr.CreateGeometryFromWkt(zone_geom.wkt)
-                zone_sref = osr.SpatialReference()
-                zone_sref.ImportFromEPSG(4326)
-                zone_sref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                zone_geom.AssignSpatialReference(zone_sref)
+                zone_geom.AssignSpatialReference(get_geog_sref())
 
     return zone_geom
 
