@@ -29,7 +29,9 @@
 Code for osgeo geometry operations.
 """
 
+import json
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pyproj
@@ -271,6 +273,37 @@ def get_geog_sref() -> osr.SpatialReference:
 
 def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
     return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_TILE_SEG_NUM)
+
+
+def shapely_to_ogr_poly(poly: shapely.Polygon, epsg: int) -> ogr.Geometry:
+    # doing a double WKT conversion to prevent precision issues nearby machine epsilon
+    poly_ogr = ogr.CreateGeometryFromWkt(
+        ogr.CreateGeometryFromWkt(poly.wkt).ExportToWkt()
+    )
+    sref = osr.SpatialReference()
+    sref.ImportFromEPSG(epsg)
+    poly_ogr.AssignSpatialReference(sref)
+
+    return poly_ogr
+
+
+def convert_proj_zone_geog(
+    input: Path | shapely.Polygon | ogr.Geometry | None,
+) -> ogr.Geometry | None:
+    if isinstance(input, Path):
+        with open(input) as f:
+            geojson = json.load(f)
+        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, shapely.Polygon):
+        proj_zone_geog = ogr.CreateGeometryFromWkt(input.wkt)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, ogr.Geometry):
+        proj_zone_geog = input
+    else:
+        proj_zone_geog = None
+
+    return proj_zone_geog
 
 
 def rasterise_polygon(

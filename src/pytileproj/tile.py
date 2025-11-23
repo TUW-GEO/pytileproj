@@ -15,6 +15,7 @@ from pytileproj._const import DECIMALS
 from pytileproj.geom import (
     ij2xy,
     round_polygon_vertices,
+    shapely_to_ogr_poly,
     transform_coords,
     transform_geometry,
     xy2ij,
@@ -710,13 +711,7 @@ class ProjTile(BaseModel):
     def __ogr_boundary(self) -> ogr.Geometry:
         """ogr.Geometry : Outer boundary of the raster geometry as an OGR polygon."""
         boundary = Polygon(self.outer_boundary_corners)
-        # doing a double WKT conversion to prevent precision issues nearby machine epsilon
-        boundary_ogr = ogr.CreateGeometryFromWkt(
-            ogr.CreateGeometryFromWkt(boundary.wkt).ExportToWkt()
-        )
-        sref = osr.SpatialReference()
-        sref.ImportFromEPSG(self.epsg)
-        boundary_ogr.AssignSpatialReference(sref)
+        boundary_ogr = shapely_to_ogr_poly(boundary, self.epsg)
 
         return boundary_ogr
 

@@ -14,6 +14,7 @@ from osgeo import ogr, osr
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
 from pytileproj.geom import (
+    convert_proj_zone_geog,
     get_geog_sref,
     rasterise_polygon,
     transform_geom_to_geog,
@@ -28,25 +29,6 @@ class ProjCoord(NamedTuple):
     x: float
     y: float
     epsg: int
-
-
-def convert_proj_zone_geog(
-    input: Path | shapely.Polygon | ogr.Geometry | None,
-) -> ogr.Geometry | None:
-    if isinstance(input, Path):
-        with open(input) as f:
-            geojson = json.load(f)
-        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(input, shapely.Polygon):
-        proj_zone_geog = ogr.CreateGeometryFromWkt(input.wkt)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(input, ogr.Geometry):
-        proj_zone_geog = input
-    else:
-        proj_zone_geog = None
-
-    return proj_zone_geog
 
 
 class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
@@ -418,8 +400,14 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         max_tiling_level = max(self.tiling_levels)
         return self[max_tiling_level].tm.matrixHeight
 
+    def n_tiles_x(self, tiling_level: int) -> int:
+        return self[tiling_level].tm.matrixWidth
+
+    def n_tiles_y(self, tiling_level: int) -> int:
+        return self[tiling_level].tm.matrixHeight
+
     def n_tiles(self, tiling_level: int) -> int:
-        return self[tiling_level].tm.matrixHeight * self[tiling_level].tm.matrixWidth
+        return self.n_tiles_x(tiling_level) * self.n_tiles_y(tiling_level)
 
     @classmethod
     def default(
