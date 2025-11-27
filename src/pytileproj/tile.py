@@ -15,12 +15,11 @@ from pytileproj._const import DECIMALS
 from pytileproj.geom import (
     ij2xy,
     round_polygon_vertices,
-    shapely_to_ogr_poly,
-    transform_coords,
+    shapely_to_ogr_polygon,
     transform_geometry,
     xy2ij,
 )
-from pytileproj.utils import pyproj_to_cartopy_crs
+from pytileproj.proj import pyproj_to_cartopy_crs, transform_coords
 
 
 class IrregularTile(BaseModel):
@@ -711,7 +710,7 @@ class ProjTile(BaseModel):
     def __ogr_boundary(self) -> ogr.Geometry:
         """ogr.Geometry : Outer boundary of the raster geometry as an OGR polygon."""
         boundary = Polygon(self.outer_boundary_corners)
-        boundary_ogr = shapely_to_ogr_poly(boundary, self.epsg)
+        boundary_ogr = shapely_to_ogr_polygon(boundary, self.epsg)
 
         return boundary_ogr
 

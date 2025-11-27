@@ -14,15 +14,15 @@ from osgeo import ogr, osr
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
 from pytileproj.geom import (
-    convert_proj_zone_geog,
+    convert_any_to_geog_ogr_geom,
     get_geog_sref,
     rasterise_polygon,
     transform_geom_to_geog,
     transform_geometry,
 )
+from pytileproj.proj import fetch_proj_zone, pyproj_to_cartopy_crs
 from pytileproj.tile import IrregularTile, ProjTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
-from pytileproj.utils import fetch_proj_zone, pyproj_to_cartopy_crs
 
 
 class ProjCoord(NamedTuple):
@@ -35,7 +35,7 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
     epsg: int
     proi_zone_geog: Annotated[
         Path | shapely.Polygon | ogr.Geometry | None,
-        AfterValidator(convert_proj_zone_geog),
+        AfterValidator(convert_any_to_geog_ogr_geom),
     ] = None
 
     _proj_zone_geog: ogr.Geometry

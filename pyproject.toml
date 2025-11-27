@@ -10,9 +10,10 @@ dependencies = [
     "gdal",
     "pyproj",
     "shapely",
-    "morecantile >= 6.2",
+    "morecantile >= 7",
     "requests",
-    "pillow"
+    "pillow",
+    "antimeridian >= 0.4.5" 
 ]
 classifiers = [
     "Intended Audience :: Science/Research",

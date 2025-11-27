@@ -25,23 +25,20 @@
 # The views and conclusions contained in the software and documentation are
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
-"""
-Code for osgeo geometry operations.
-"""
 
 import json
 import warnings
 from pathlib import Path
 
 import numpy as np
-import pyproj
 import shapely
+import shapely.wkt as swkt
+from antimeridian import fix_multi_polygon, fix_polygon
 from osgeo import ogr, osr
 from PIL import Image, ImageDraw
-from shapely.geometry import LineString, Polygon
-from shapely.ops import linemerge, polygonize, unary_union
 
 from pytileproj._const import DECIMALS, DEFAULT_TILE_SEG_NUM
+from pytileproj.proj import get_geog_sref
 
 
 def xy2ij(
@@ -148,9 +145,9 @@ def ij2xy(
 
     Returns
     -------
-    x : float or np.ndarray
+    float or np.ndarray
         World system coordinate(s) in X direction.
-    y : float or np.ndarray
+    float or np.ndarray
         World system coordinate(s) in Y direction.
 
     """
@@ -180,31 +177,24 @@ def ij2xy(
     return x, y
 
 
-def transform_coords(
-    x: float, y: float, this_crs: pyproj.CRS, other_crs: pyproj.CRS
-) -> tuple[float, float]:
-    traffo = pyproj.Transformer.from_crs(this_crs, other_crs, always_xy=True)
-    return traffo.transform(x, y)
-
-
-def round_polygon_vertices(polygon: ogr.Geometry, decimals: int) -> ogr.Geometry:
+def round_polygon_vertices(poly: ogr.Geometry, decimals: int) -> ogr.Geometry:
     """
     'Cleans' the coordinates of an OGR polygon, so that it has rounded coordinates.
 
     Parameters
     ----------
-    polygon : ogr.wkbPolygon
-        An OGR polygon.
+    poly : ogr.Geometry
+        An OGR polygon object.
     decimals : int
         Number of significant digits to round to.
 
     Returns
     -------
-    geometry_out : ogr.wkbPolygon
+    ogr.Geometry
         An OGR polygon with rounded coordinates.
 
     """
-    ring = polygon.GetGeometryRef(0)
+    ring = poly.GetGeometryRef(0)
 
     rounded_ring = ogr.Geometry(ogr.wkbLinearRing)
 
@@ -219,63 +209,29 @@ def round_polygon_vertices(polygon: ogr.Geometry, decimals: int) -> ogr.Geometry
         ]
         rounded_ring.AddPoint(rx, ry, rz)
 
-    geometry_out = ogr.Geometry(ogr.wkbPolygon)
-    geometry_out.AddGeometry(rounded_ring)
+    poly_out = ogr.Geometry(ogr.wkbPolygon)
+    poly_out.AddGeometry(rounded_ring)
 
-    return geometry_out
+    return poly_out
 
 
-def transform_geometry(
-    geometry: ogr.Geometry, sref: osr.SpatialReference, segment=None
-):
+def shapely_to_ogr_polygon(poly: shapely.Polygon, epsg: int) -> ogr.Geometry:
     """
-    returns the reprojected geometry - in the specified spatial reference
+    Converts a shapely to an OGR polygon and assigns the given projection.
 
     Parameters
     ----------
-    geometry : OGRGeometry
-        geometry object
-    osr_spref : OGRSpatialReference
-        spatial reference to what the geometry should be transformed to
-    segment : float, optional
-        for precision: distance in units of input osr_spref of longest
-        segment of the geometry polygon
+    poly: shapely.Polygon
+        Shapely polygon object.
+    epsg: int
+        EPSG code for the polygon.
 
     Returns
     -------
-    OGRGeometry
-        a geometry represented in the target spatial reference
+    ogr.Geometry
+        OGR polygon object.
 
     """
-    geometry_out = geometry.Clone()
-
-    # modify the geometry such it has no segment longer then the given distance
-    if segment is not None:
-        geometry_out = segmentize_geometry(geometry_out, segment=segment)
-
-    geometry_out.TransformTo(sref)
-
-    if sref.ExportToProj4().startswith("+proj=longlat"):
-        if geometry_out.GetGeometryName() in ["POLYGON", "MULTIPOLYGON"]:
-            geometry_out = split_polygon_by_antimeridian(geometry_out)
-
-    geometry = None
-    return geometry_out
-
-
-def get_geog_sref() -> osr.SpatialReference:
-    sref = osr.SpatialReference()
-    sref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    sref.ImportFromEPSG(4326)
-
-    return sref
-
-
-def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
-    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_TILE_SEG_NUM)
-
-
-def shapely_to_ogr_poly(poly: shapely.Polygon, epsg: int) -> ogr.Geometry:
     # doing a double WKT conversion to prevent precision issues nearby machine epsilon
     poly_ogr = ogr.CreateGeometryFromWkt(
         ogr.CreateGeometryFromWkt(poly.wkt).ExportToWkt()
@@ -287,27 +243,8 @@ def shapely_to_ogr_poly(poly: shapely.Polygon, epsg: int) -> ogr.Geometry:
     return poly_ogr
 
 
-def convert_proj_zone_geog(
-    input: Path | shapely.Polygon | ogr.Geometry | None,
-) -> ogr.Geometry | None:
-    if isinstance(input, Path):
-        with open(input) as f:
-            geojson = json.load(f)
-        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(input, shapely.Polygon):
-        proj_zone_geog = ogr.CreateGeometryFromWkt(input.wkt)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(input, ogr.Geometry):
-        proj_zone_geog = input
-    else:
-        proj_zone_geog = None
-
-    return proj_zone_geog
-
-
 def rasterise_polygon(
-    geom: shapely.Polygon,
+    poly: shapely.Polygon,
     x_pixel_size: int | float,
     y_pixel_size: int | float,
     extent: tuple = None,
@@ -317,7 +254,7 @@ def rasterise_polygon(
 
     Parameters
     ----------
-    geom : shapely.geometry.Polygon
+    poly : shapely.geometry.Polygon
         Clockwise list of x and y coordinates defining a polygon.
     x_pixel_size : float
         Absolute pixel size in X direction.
@@ -343,10 +280,10 @@ def rasterise_polygon(
     """
 
     # retrieve polygon points
-    geom_pts = list(geom.exterior.coords)
+    poly_pts = list(poly.exterior.coords)
 
     # split tuple points into x and y coordinates
-    xs, ys = list(zip(*geom_pts, strict=False))
+    xs, ys = list(zip(*poly_pts, strict=False))
 
     # round coordinates to upper-left corner
     xs = (
@@ -383,151 +320,181 @@ def rasterise_polygon(
     return mask_ar
 
 
-def segmentize_geometry(geometry, segment=0.5):
+def segmentize_geometry(geom: ogr.Geometry, segment: float = 0.5) -> ogr.Geometry:
     """
-    segmentizes the lines of a geometry
+    Segmentizes the lines of a geometry.
 
     Parameters
     ----------
-    geometry : OGRGeometry
-        geometry object
+    geom : ogr.Geometry
+        OGR geometry object.
     segment : float, optional
-        for precision: distance in units of input osr_spref of longest
-        segment of the geometry polygon
+        For precision: distance in units of the geometry projection defining longest
+        segment of the geometry.
 
     Returns
     -------
-    OGRGeometry
-        a congruent geometry realised by more vertices along its shape
+    ogr.Geometry
+        A congruent geometry realised by more vertices along its shape.
+
     """
 
-    geometry_out = geometry.Clone()
+    geom_seg = geom.Clone()
+    geom_seg.Segmentize(segment)
 
-    geometry_out.Segmentize(segment)
-
-    geometry = None
-    return geometry_out
+    return geom_seg
 
 
-def get_lonlat_intersection(geom_1: ogr.Geometry, geom_2: ogr.Geometry) -> ogr.Geometry:
+def get_geog_intersection(poly_1: ogr.Geometry, poly_2: ogr.Geometry) -> bool:
     """
-    gets the intersect in lonlat space.
-    geometry1 is split at the antimeridian
-    (i.e. the 180 degree dateline)
+    Gets the intersect in the LonLat space. `poly_1` is split at the antimeridian (i.e. the 180 degree dateline).
 
     Parameters
     ----------
-    geometry1 : OGRGeometry
-        polygon geometry object in lonlat space
-        is split by the antimeridian
-    geometry2 : OGRGeometry
-        geometry object
-        should be the large one
+    poly_1 : ogr.Geometry
+        OGR polygon object in LonLat space. It is split by the antimeridian.
+    poly_2 : ogr.Geometry
+        Other OGR polygon object to intersect with.
 
     Returns
     -------
     boolean
-        does geometry1 intersect with geometry2?
+        True if both polygons intersect, false otherwise.
+
     """
+    poly_1c = poly_1.Clone()
+    if poly_1.GetGeometryName() == "MULTIPOLYGON":
+        poly_1c = ogr.ForceToPolygon(poly_1c)
+        warnings.warn("Take care: multi-polygon is forced to a polygon!", stacklevel=1)
 
-    geom_1_cp = geom_1.Clone()
-    geom_2_cp = geom_2.Clone()
-    geom_1 = None
-    geom_2 = None
+    polygons = split_polygon_by_antimeridian(poly_1c)
 
-    if geom_1_cp.GetGeometryName() == "MULTIPOLYGON":
-        geom_1_cp = ogr.ForceToPolygon(geom_1_cp)
-        print(
-            "Warning: get_lonlat_intersection(): Take care: Multipolygon is forced to Polygon!"
-        )
-
-    polygons = split_polygon_by_antimeridian(geom_1_cp)
-
-    return polygons.Intersection(geom_2_cp)
+    return polygons.Intersection(poly_2.Clone())
 
 
 def split_polygon_by_antimeridian(
-    lonlat_polygon: ogr.Geometry, split_limit: float = 150.0
+    geog_poly: ogr.Geometry, great_circle: bool = False
 ) -> ogr.Geometry:
     """
-    Function that splits a polygon at the antimeridian
-    (i.e. the 180 degree dateline)
+    Function that splits a polygon or multi-polygon at the antimeridian (i.e. the 180 degree dateline).
 
     Parameters
     ----------
-    lonlat_polygon : OGRGeometry
-        geometry object in lonlat space to be split by the antimeridian
-    split_limit : float, optional
-        longitude that determines what is split and what not. default is 150.0
-        e.g. a polygon with a centre east of 150E or west of 150W will be split!
+    geog_poly : ogr.Geometry
+        OGR polygon or multi-polygon object in LonLat space to be split by the antimeridian.
+    great_circle: bool, optional
+        True, if a great circle on the sphere should be used to split segments crossing the antimeridian. Defaults to false.
+
     Returns
     -------
-    splitted_polygons : OGRGeometry
-        MULTIPOLYGON comprising east and west parts of lonlat_polygon
-        contains only one POLYGON if no intersect with antimeridian is given
+    ogr.Geometry
+        Multi-polygon comprising east and west parts of `geog_poly`. It contains only one polygon if no intersect with the antimeridian is given.
 
     """
+    geom_type = geog_poly.GetGeometryName()
+    if geom_type == "MULTIPOLYGON":
+        geog_poly_am = fix_multi_polygon(
+            swkt.loads(geog_poly.ExportToWkt()), great_circle=great_circle
+        )
+    elif geom_type == "POLYGON":
+        geog_poly_am = fix_polygon(
+            swkt.loads(geog_poly.ExportToWkt()), great_circle=great_circle
+        )
+    else:
+        raise ValueError(f"Geometry type {geom_type} not supported.")
 
-    # prepare the input polygon
-    points = lonlat_polygon.GetGeometryRef(0).GetPoints()
-    lons = [p[0] for p in points]
+    geog_poly_am = ogr.CreateGeometryFromWkt(geog_poly_am.wkt)
+    geog_poly_am.AssignSpatialReference(geog_poly.GetSpatialReference())
 
-    # case of very long polygon in east-west direction,
-    # crossing the Greenwich meridian, but not the antimeridian,
-    # which is most probably a wrong interpretion.
-    # --> wrapping longitudes to the eastern Hemisphere (adding 360°)
-    if (len(np.unique(np.sign(lons))) == 2) and (np.mean(np.abs(lons)) > split_limit):
-        new_points = [(p[0] + 360, p[1]) if p[0] < 0 else p for p in points]
-        lonlat_polygon = ogr.CreateGeometryFromWkt(shapely.Polygon(new_points).wkt)
-        lonlat_polygon.AssignSpatialReference(get_geog_sref())
-        lonlat_polygon = segmentize_geometry(lonlat_polygon, 0.5)
+    return geog_poly_am
 
-    # return input polygon if not cross anti-meridian
-    max_lon = np.max([p[0] for p in lonlat_polygon.GetGeometryRef(0).GetPoints()])
-    if max_lon <= 180:
-        return lonlat_polygon
 
-    # define the antimeridian
-    antimeridian = LineString([(180, -90), (180, 90)])
+def transform_geometry(
+    geom: ogr.Geometry, sref: osr.SpatialReference, segment: float | None = None
+) -> ogr.Geometry:
+    """
+    Transforms an OGR geometry to the given target spatial reference system.
 
-    # use shapely for the splitting
-    merged = linemerge(
-        [Polygon(lonlat_polygon.GetBoundary().GetPoints()).boundary, antimeridian]
-    )
-    borders = unary_union(merged)
-    polygons = polygonize(borders)
+    Parameters
+    ----------
+    geom : ogr.Geometry
+        OGR geometry object to transform.
+    sref : osr.SpatialReference
+        OSR spatial reference to what the geometry should be transformed to.
+    segment : float, optional
+        For precision: distance in units of the geometry projection defining longest
+        segment of the geometry.
 
-    # setup OGR multipolygon
-    splitted_polygons = ogr.Geometry(ogr.wkbMultiPolygon)
-    geo_sr = get_geog_sref()
-    splitted_polygons.AssignSpatialReference(geo_sr)
+    Returns
+    -------
+    ogr.Geometry
+        An OGR geometry represented in the target spatial reference.
 
-    # wrap the longitude coordinates
-    # to get only longitudes out out [0, 180] or [-180, 0]
-    for polygon in polygons:
-        coords = polygon.exterior.coords[:]
-        lons = [coord[0] for coord in coords]
+    """
+    trans_geom = geom.Clone()
 
-        # all greater than 180° longitude (Western Hemisphere)
-        if (len(np.unique(np.sign(lons))) == 1) and (np.greater_equal(lons, 180).all()):
-            wrapped_points = [(coord[0] - 360, coord[1]) for coord in coords]
+    # modify the geometry such it has no segment longer then the given distance
+    if segment is not None:
+        trans_geom = segmentize_geometry(trans_geom, segment=segment)
 
-        # all less than 180° longitude (Eastern Hemisphere)
-        elif (len(np.unique(np.sign(lons))) == 1) and (np.less_equal(lons, 180).all()):
-            wrapped_points = coords
+    trans_geom.TransformTo(sref)
 
-        # crossing the Greenwhich-meridian
-        elif (len(np.unique(np.sign(lons))) >= 2) and (
-            np.mean(np.abs(lons)) < split_limit
-        ):
-            wrapped_points = coords
+    if sref.ExportToProj4().startswith("+proj=longlat"):
+        if trans_geom.GetGeometryName() in ["POLYGON", "MULTIPOLYGON"]:
+            trans_geom = split_polygon_by_antimeridian(trans_geom)
 
-        # crossing the Greenwhich-meridian, but should cross the antimeridian
-        # (should not be happen actually)
-        else:
-            continue
+    return trans_geom
 
-        new_poly = Polygon(wrapped_points)
-        splitted_polygons.AddGeometry(ogr.CreateGeometryFromWkt(new_poly.wkt))
 
-    return splitted_polygons
+def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
+    """
+    Transforms geometry to the LonLat system.
+
+    Parameters
+    ----------
+    geom: ogr.Geometry
+        OGR geometry object to transform.
+
+    Returns
+    -------
+    ogr.Geometry
+        OGR geometry object in the LonLat system.
+    """
+    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_TILE_SEG_NUM)
+
+
+def convert_any_to_geog_ogr_geom(
+    input: Path | shapely.Geometry | ogr.Geometry | None,
+) -> ogr.Geometry | None:
+    """
+    Converts an arbitrary input to an OGR geometry in the LonLat system.
+
+    Parameters
+    ----------
+    input: Path | shapely.Polygon | ogr.Geometry | None
+        Input representing a geometry object. It can be one of:
+            - a path to a GeoJSON file
+            - a shapely.Geometry
+            - an ogr.Geometry
+            - None
+
+    Returns
+    -------
+    ogr.Geometry | None
+        Input converted to an OGR polygon or multi-polygon. If the input is None, then None will be returned.
+
+    """
+    if isinstance(input, Path):
+        with open(input) as f:
+            geojson = json.load(f)
+        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, shapely.Polygon):
+        proj_zone_geog = ogr.CreateGeometryFromWkt(input.wkt)
+        proj_zone_geog.AssignSpatialReference(get_geog_sref())
+    elif isinstance(input, ogr.Geometry):
+        proj_zone_geog = input
+    else:
+        proj_zone_geog = None
+
+    return proj_zone_geog

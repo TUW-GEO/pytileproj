@@ -6,6 +6,7 @@ dependencies:
   - pyproj
   - shapely
   - pip
-  - morecantile >= 6.2
+  - morecantile >= 7
   - requests
   - pre-commit
+  - antimeridian >= 0.4.5

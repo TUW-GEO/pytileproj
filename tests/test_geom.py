@@ -41,13 +41,11 @@ def poly_spitzbergen() -> ogr.Geometry:
 
 
 def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska):
-    result = split_polygon_by_antimeridian(poly_siberia_alaska)
+    result = split_polygon_by_antimeridian(poly_siberia_alaska, great_circle=False)
 
     assert math.isclose(
-        poly_siberia_alaska.Area() * 2,
-        result.GetGeometryRef(0).Area()
-        + result.GetGeometryRef(1).Area()
-        + result.Area(),
+        poly_siberia_alaska.Area(),
+        result.GetGeometryRef(0).Area() + result.GetGeometryRef(1).Area(),
         rel_tol=1e-6,
     )
 
@@ -97,3 +95,7 @@ def test_rasterise_polygon():
     geom = shapely.Polygon(poly_pts)
     raster = rasterise_polygon(geom, 1, 1)
     assert np.all(raster == ref_raster)
+
+
+if __name__ == "__main__":
+    pass
