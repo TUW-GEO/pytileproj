@@ -27,6 +27,7 @@ def e7eu_grid_t1():
         sampling=10,
         tile_shape_px=(10000, 10000),
         tiling_level=1,
+        axis_orientation=["E", "S"],
     )
 
 
@@ -38,6 +39,7 @@ def e7eu_grid_t3():
         sampling=20,
         tile_shape_px=(15000, 15000),
         tiling_level=0,
+        axis_orientation=["E", "S"],
     )
 
 
@@ -49,6 +51,7 @@ def e7eu_grid_invalid():
         sampling=20,
         tile_shape_px=(15000, 15000),
         tiling_level=2,
+        axis_orientation=["E", "S"],
     )
 
 
@@ -143,13 +146,13 @@ def test_reg_pgs_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
     assert tilename_1 == tilename_2
 
 
-def test_reg_pgs_proj_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
+def test_reg_pgs_raster_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
     tile = Tile(x=37, y=23, z=1)
     tilename_1 = e7eu_rpsb._create_tilename(tile)
-    proj_tile = e7eu_rpsb.create_tile(tilename_1)
-    assert proj_tile.name == "E37S23T1"
-    assert proj_tile.shape == (10000, 10000)
-    assert proj_tile.geotrans == (
+    raster_tile = e7eu_rpsb.create_tile(tilename_1)
+    assert raster_tile.name == "E37S23T1"
+    assert raster_tile.shape == (10000, 10000)
+    assert raster_tile.geotrans == (
         e7eu_rpsb[0].origin_xy[0] + 10000 * 10 * tile.x,
         10.0,
         0.0,
@@ -177,6 +180,7 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
         sampling=20,
         tile_shape_px=(10000, 10000),
         tiling_level=0,
+        axis_orientation=["E", "S"],
     )
     _ = RegularProjTilingSystem(
         name="e7eu",

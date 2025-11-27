@@ -25,16 +25,15 @@
 # The views and conclusions contained in the software and documentation are
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
-"""
-Code for Tiled Projection Systems.
-"""
 
+from collections.abc import Generator
 from enum import Enum
 from typing import Annotated, Literal
 
 import numpy as np
 import shapely
-from morecantile.models import Tile as RegularTile, TileMatrix
+from morecantile.models import Tile as RegularTile
+from morecantile.models import TileMatrix
 from pydantic import AfterValidator, BaseModel, NonNegativeFloat, NonNegativeInt
 from shapely.geometry import Polygon
 
@@ -42,11 +41,15 @@ from pytileproj.tile import IrregularTile
 
 
 class CornerOfOrigin(Enum):
+    """Defines a corner of origin in an OGC compliant manner."""
+
     bottom_left = "bottomLeft"
     top_left = "topLeft"
 
 
 class RegularTiling(BaseModel, arbitrary_types_allowed=True):
+    """Defines regular tiling scheme following the OGC standard."""
+
     name: str
     extent: tuple[float, float, float, float]
     sampling: NonNegativeFloat
@@ -59,11 +62,6 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.axis_orientation = (
-            "E",
-            "S",
-        )  # hardcoded because of the cornerOfOrigin issue below
-
         matrix_width = int(
             (self.extent[2] - self.extent[0]) / (self.tile_shape_px[0] * self.sampling)
         )
@@ -74,7 +72,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=CornerOfOrigin.top_left.value,  # unfortunately, this value is hardcoded within morecantile (see https://github.com/developmentseed/morecantile/issues/189)
+            cornerOfOrigin=self.corner_of_origin,
             pointOfOrigin=self.origin_xy,
             tileWidth=self.tile_shape_px[0],
             tileHeight=self.tile_shape_px[1],
@@ -86,34 +84,59 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
 
     @property
     def corner_of_origin(self) -> CornerOfOrigin:
+        """Corner of origin of the tiling."""
         return (
-            CornerOfOrigin.bottom_left
+            CornerOfOrigin.bottom_left.value
             if self.axis_orientation[1] == "N"
-            else CornerOfOrigin.top_left
+            else CornerOfOrigin.top_left.value
         )
 
     @property
     def origin_xy(self) -> tuple:
+        """Origin of the tiling."""
         return self.extent[0], self.extent[3]
 
     @property
     def n_tiles(self) -> int:
+        """Number of tiles in the tiling."""
         return self._tm.matrixHeight * self._tm.matrixWidth
 
     @property
     def tm(self) -> TileMatrix:
+        """morecantile's TileMatrix instance."""
         return self._tm
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[RegularTile, RegularTile, RegularTile]:
+        """Iterates over tiles in the tiling."""
         for x in range(self._tm.matrixWidth):
             for y in range(self._tm.matrixHeight):
                 yield RegularTile(x, y, self.tiling_level)
 
     def to_ogc_repr(self) -> dict:
+        """OGC representation of the tiling."""
         return self._tm.model_dump()
 
 
 def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
+    """
+    Test if input array representing an adjacency matrix is 2D.
+
+    Parameters
+    ----------
+    input: np.ndarray | None
+        Array representing
+
+    Returns
+    -------
+    np.ndarray | None
+        Forwarded input.
+
+    Raises
+    ------
+    ValueError
+        If input array is not 2D.
+
+    """
     if input is not None:
         if input.ndim != 2:
             err_msg = "Adjacency matrix is expected to be passed as a 2D numpy array."
@@ -123,6 +146,8 @@ def validate_adj_matrix(input: np.ndarray | None) -> np.ndarray | None:
 
 
 class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
+    """Defines irregular tiling scheme."""
+
     name: str
     tiles: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
@@ -137,16 +162,48 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
     @property
     def tile_ids(self) -> list[str]:
+        """All tile ID's of the tiling."""
         return list(self.tiles.keys())
 
     def neighbours(self, tile_id: str) -> list[IrregularTile]:
+        """
+        Returns the neighbouring tiles for a given tile ID.
+
+        Parameters
+        ----------
+        tile_id: str
+            Tile ID.
+
+        Returns
+        -------
+        list[IrregularTile]
+            List of neighbouring tiles.
+
+        """
         tile_idx = self.tile_ids.index(tile_id)
         nbr_idxs = self.adjacency_matrix[tile_idx, :]
         nbr_tiles = [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
         return nbr_tiles
 
-    def tiles_intersecting_bbox(self, bbox: tuple[float, float, float, float]):
+    def tiles_intersecting_bbox(
+        self, bbox: tuple[float, float, float, float]
+    ) -> Generator[IrregularTile, IrregularTile, IrregularTile]:
+        """
+        Returns tiles intersecting with the given bounding box.
+
+        Parameters
+        ----------
+        bbox: tuple[float, float, float, float]
+            Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
+
+        Returns
+        -------
+        Generator[IrregularTile, IrregularTile, IrregularTile]
+            Yields tile after tile, which intersects with the given bounding box.
+
+        """
+
         min_x, min_y, max_x, max_y = bbox
         bbox = Polygon(
             [
@@ -162,6 +219,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
                 yield tile
 
     def _build_adjacency_matrix(self) -> np.ndarray:
+        """Creates adjacency matrix based on tiles touching each other."""
         n_tiles = len(self.tiles)
         adjacency_matrix = np.zeros((n_tiles, n_tiles), dtype=bool)
         for i in range(n_tiles):
@@ -175,10 +233,25 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         return adjacency_matrix
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[IrregularTile, IrregularTile, IrregularTile]:
+        """Yields one tile after the other."""
         yield from self.tiles.values()
 
     def __getitem__(self, tile_id: str) -> IrregularTile:
+        """
+        Returns tile instance corresponding to the given tile ID.
+
+        Parameters
+        ----------
+        tile_id: str
+            Tile ID.
+
+        Returns
+        -------
+        IrregularTile
+            Tile instance corresponding to the given tile ID.
+
+        """
         return self.tiles[tile_id]
 
 

@@ -53,7 +53,7 @@ def test_to_ogc(reg_grid: RegularTiling):
         "id": "0",
         "scaleDenominator": 3571.4285714285716,
         "cellSize": 1.0,
-        "cornerOfOrigin": "topLeft",
+        "cornerOfOrigin": "bottomLeft",
         "pointOfOrigin": (0.0, 90.0),
         "tileWidth": 10,
         "tileHeight": 10,
