@@ -205,7 +205,7 @@ def test_plot(ref_proj_tile: RasterTile):
         ref_proj_tile_cp = copy.deepcopy(ref_proj_tile)
         ref_proj_tile_cp.name = "E048N018T1"
         ref_proj_tile_cp.plot(
-            proj=ccrs.EckertI(), label_geom=True, add_country_borders=True
+            proj=ccrs.EckertI(), label_tile=True, add_country_borders=True
         )
 
         # test plotting with different input projection

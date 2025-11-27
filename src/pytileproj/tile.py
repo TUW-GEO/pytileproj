@@ -33,7 +33,6 @@ import numpy as np
 import pyproj
 import shapely
 import shapely.wkt
-from matplotlib.patches import Polygon as PolygonPatch
 from osgeo import ogr, osr
 from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
@@ -641,7 +640,7 @@ class RasterTile(BaseModel):
         alpha: float = 1.0,
         proj=None,
         show: bool = False,
-        label_geom: bool = False,
+        label_tile: bool = False,
         add_country_borders: bool = True,
         extent: bool = None,
     ):
@@ -665,7 +664,7 @@ class RasterTile(BaseModel):
             If None, the projection of the spatial reference system of the raster tile is taken.
         show : bool, optional
             If True, the plot result is shown (default is False).
-        label_geom : bool, optional
+        label_tile : bool, optional
             If True, the geometry name is plotted at the center of the raster geometry (default is False).
         add_country_borders : bool, optional
             If True, country borders are added to the plot (`cartopy.feature.BORDERS`) (default is False).
@@ -682,7 +681,9 @@ class RasterTile(BaseModel):
 
         if "matplotlib" in sys.modules and "cartopy" in sys.modules:
             import cartopy
+            import cartopy.feature
             import matplotlib.pyplot as plt
+            from matplotlib.patches import Polygon as PolygonPatch
         else:
             err_msg = "Modules 'matplotlib' and 'cartopy' are mandatory for plotting a raster tile object."
             raise ImportError(err_msg)
@@ -717,7 +718,7 @@ class RasterTile(BaseModel):
             ax.set_xlim([extent[0], extent[2]])
             ax.set_ylim([extent[1], extent[3]])
 
-        if self.name is not None and label_geom:
+        if self.name is not None and label_tile:
             transform = this_proj._as_mpl_transform(ax)
             ax.annotate(
                 str(self.name),
