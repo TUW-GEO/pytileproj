@@ -60,9 +60,9 @@ lint.ignore = [
 # Optional: autofix simple issues when running `ruff check --fix`
 fix = true
 
-#[tool.ruff.lint.isort]
-#known-first-party = ["pytileproj"]
-#combine-as-imports = true
+[tool.ruff.lint.isort]
+known-first-party = ["pytileproj"]
+combine-as-imports = true
 
 [tool.setuptools_scm]
 # For smarter version schemes and other configuration options,
