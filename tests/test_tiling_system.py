@@ -7,7 +7,7 @@ import pytest
 from morecantile.models import Tile
 from osgeo import osr
 
-from pytileproj.tile import ProjTile
+from pytileproj.tile import RasterTile
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
     ProjSystemBase,
@@ -102,16 +102,20 @@ def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling
 
 
 def test_projgridsystembase_tile(e7eu_psb: ProjTilingSystemBase):
-    e7_tile = ProjTile.from_extent([3700000, 2300000, 3800000, 2400000], 27704, 10, 10)
+    e7_tile = RasterTile.from_extent(
+        [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
+    )
     assert e7_tile in e7eu_psb
 
 
 def test_projgridsystembase_mask(e7eu_psb: ProjTilingSystemBase):
-    e7_tile = ProjTile.from_extent([3700000, 2300000, 3800000, 2400000], 27704, 10, 10)
+    e7_tile = RasterTile.from_extent(
+        [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
+    )
     tile_mask = e7eu_psb.tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.ones((10000, 10000)))
 
-    e7_tile = ProjTile.from_extent([0, 0, 100000, 100000], 27704, 10, 10)
+    e7_tile = RasterTile.from_extent([0, 0, 100000, 100000], 27704, 10, 10)
     tile_mask = e7eu_psb.tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.zeros((10000, 10000)))
 

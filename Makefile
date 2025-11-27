@@ -38,7 +38,7 @@ test:
 	source .venv/bin/activate && pytest tests/ -rsx --verbose --color=yes --cov=pytileproj --cov-report term-missing
 
 version:
-	echo -e "__version__ = \"$(shell git describe --always --tags --abbrev=0)\"\n__commit__ = \"$(shell git rev-parse --short HEAD)\"" > src/pytileproj/_version.py
+	echo -e "$(shell git describe --always --tags --abbrev=0)\n$(shell git rev-parse --short HEAD)" > VERSION.txt
 
 dist: version
 	pip3 install build twine

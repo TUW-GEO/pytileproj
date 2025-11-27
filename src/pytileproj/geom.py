@@ -37,7 +37,7 @@ from antimeridian import fix_multi_polygon, fix_polygon
 from osgeo import ogr, osr
 from PIL import Image, ImageDraw
 
-from pytileproj._const import DECIMALS, DEFAULT_TILE_SEG_NUM
+from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM
 from pytileproj.proj import get_geog_sref
 
 
@@ -460,7 +460,7 @@ def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
     ogr.Geometry
         OGR geometry object in the LonLat system.
     """
-    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_TILE_SEG_NUM)
+    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_SEG_NUM)
 
 
 def convert_any_to_geog_ogr_geom(

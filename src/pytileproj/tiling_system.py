@@ -21,7 +21,7 @@ from pytileproj.geom import (
     transform_geometry,
 )
 from pytileproj.proj import fetch_proj_zone, pyproj_to_cartopy_crs
-from pytileproj.tile import IrregularTile, ProjTile
+from pytileproj.tile import IrregularTile, RasterTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
 
 
@@ -170,15 +170,15 @@ class TilingSystemBase(BaseModel):
 class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
     tiles_in_zone_only: bool = True
 
-    def create_tile(self, tilename: str) -> ProjTile:
+    def create_tile(self, tilename: str) -> RasterTile:
         raise NotImplementedError
 
     def _to_proj_tile(
         self, tile: RegularTile | IrregularTile, name: str = None
-    ) -> ProjTile:
+    ) -> RasterTile:
         raise NotImplementedError
 
-    def _tile_in_zone(self, tile: ProjTile) -> bool:
+    def _tile_in_zone(self, tile: RasterTile) -> bool:
         tile_in_zone = True
         if self.tiles_in_zone_only:
             tile_in_zone = tile.boundary_ogr.Intersect(self._proj_zone)
@@ -193,7 +193,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
     ) -> list[RegularTile | IrregularTile]:
         raise NotImplementedError
 
-    def tile_mask(self, proj_tile: ProjTile) -> np.ndarray:
+    def tile_mask(self, proj_tile: RasterTile) -> np.ndarray:
         if proj_tile.epsg != self.epsg:
             raise ValueError("Projection of tile and tiling system must match.")
 
@@ -314,8 +314,8 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
         return ax
 
-    def __contains__(self, geom: ProjTile | ogr.Geometry) -> bool:
-        if isinstance(geom, ProjTile):
+    def __contains__(self, geom: RasterTile | ogr.Geometry) -> bool:
+        if isinstance(geom, RasterTile):
             arg = geom.boundary_ogr
         else:
             arg = geom
@@ -452,7 +452,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         tile = RegularTile(x, y, tiling_level)
         return tile
 
-    def create_tile(self, tilename: str) -> ProjTile:
+    def create_tile(self, tilename: str) -> RasterTile:
         tile = self._create_tile(tilename)
         proj_tile = self._to_proj_tile(tile, name=tilename)
         if self.tiles_in_zone_only:
@@ -461,10 +461,10 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
 
         return proj_tile
 
-    def _to_proj_tile(self, tile: RegularTile, name: str = None) -> ProjTile:
+    def _to_proj_tile(self, tile: RegularTile, name: str = None) -> RasterTile:
         extent = self._tms.xy_bounds(tile)
         sampling = self[tile.z].sampling
-        return ProjTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
+        return RasterTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
 
     def _search_tiles_in_bbox_geog(self, bbox, tiling_level):
         min_x, min_y, max_x, max_y = bbox
@@ -495,7 +495,7 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         tiling_level = self._tilename_to_level(tilename)
         return self[tiling_level].tiles[tilename]
 
-    def create_tile(self, tilename: str) -> ProjTile:
+    def create_tile(self, tilename: str) -> RasterTile:
         tile = self._create_tile(tilename)
         proj_tile = self._to_proj_tile(tile, name=tilename)
         if self.tiles_in_zone_only:
@@ -508,10 +508,10 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         proj_tile = self.create_tile(tilename)
         return proj_tile.boundary_ogr
 
-    def _to_proj_tile(self, tile: IrregularTile, name: str = None) -> ProjTile:
+    def _to_proj_tile(self, tile: IrregularTile, name: str = None) -> RasterTile:
         extent = tile.boundary.bounds
         sampling = self[tile.z].sampling
-        return ProjTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
+        return RasterTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
 
     def search_tiles_in_lonlat_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
