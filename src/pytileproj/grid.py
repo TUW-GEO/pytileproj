@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from pytileproj.tiling_system import (
     RegularProjTilingSystem,
@@ -13,14 +13,14 @@ from pytileproj.tiling_system import (
 class RegularGrid(BaseModel, extra="allow"):
     """Defines a collection of regular, projected, multi-level tiling systems sharing the same tiling scheme."""
 
-    _rpts_defs: dict[int, RPTSDefinition]
-    _tiling_defs: dict[int, RegularTilingDefinition]
-    _allowed_samplings: dict[int, list[float | int]]
-    _congruent: bool
+    _rpts_defs: dict[int, RPTSDefinition] | None = None
+    _tiling_defs: dict[int, RegularTilingDefinition] | None = None
+    _allowed_samplings: dict[int, list[float | int]] | None = None
+    _congruent: bool = True
 
-    def __init__(
-        self, tiling_systems: dict[str, RegularProjTilingSystem] | None = None
-    ):
+    _rpts_cls = RegularProjTilingSystem
+
+    def __init__(self, **kwargs):
         """
         Constructs a regular grid object from a collection of sub-grids represented by a dictionary of regular, projected tiling systems.
 
@@ -30,7 +30,7 @@ class RegularGrid(BaseModel, extra="allow"):
             Dictionary with the name of the tiling system as a key and a `RegularProjTilingSystem` instance as a value.
 
         """
-        super().__init__(**tiling_systems)
+        super().__init__(**kwargs)
 
     @staticmethod
     def _create_rpts_from_def(
@@ -144,9 +144,9 @@ class RegularGrid(BaseModel, extra="allow"):
             int(name): RegularTilingDefinition(**rpts_def)
             for name, rpts_def in grid_def["tiling_defs"].items()
         }
-        allowed_samplings = {
-            int(k): v for k, v in grid_def["allowed_samplings"].items()
-        }
+        allowed_samplings = grid_def["allowed_samplings"]
+        if allowed_samplings is not None:
+            allowed_samplings = {int(k): v for k, v in allowed_samplings.items()}
         congruent = grid_def["congruent"]
 
         return cls.from_sampling(
@@ -207,7 +207,10 @@ class RegularGrid(BaseModel, extra="allow"):
                 allowed_samplings = rpts.allowed_samplings
                 congruent = rpts.congruent
             rpts_defs[name] = RPTSDefinition(
-                name=name, epsg=rpts.epsg, extent=rpts[ref_tiling_level].extent
+                name=name,
+                epsg=rpts.epsg,
+                extent=rpts[ref_tiling_level].extent,
+                axis_orientation=rpts[ref_tiling_level].axis_orientation,
             ).model_dump()
 
         return rpts_defs, tiling_defs, allowed_samplings, congruent
@@ -261,6 +264,41 @@ class RegularGrid(BaseModel, extra="allow"):
         with open(json_path, "w") as f:
             f.writelines(grid_def)
 
+    @staticmethod
+    def _validate_json(
+        grid_def: str,
+        rgrid_cls: "RegularGrid",
+        rpts_cls: RegularProjTilingSystem,
+    ) -> "RegularGrid":
+        """
+        Creates a regular grid object from the JSON class representation.
+
+        Parameters
+        ----------
+        grid_def: str
+            JSON string representing a regular grid instance.
+        rgrid_cls: class
+            Regular grid class.
+        rpts_cls: class
+            Regular projected tiling system class.
+
+        Returns
+        -------
+        RegularGrid
+            Regular grid.
+
+        """
+        rgrid = TypeAdapter(rgrid_cls).validate_json(grid_def)
+        rpts_names = list(rgrid.model_dump().keys())
+        for rpts_name in rpts_names:
+            setattr(
+                rgrid,
+                rpts_name,
+                TypeAdapter(rpts_cls).validate_python(rgrid[rpts_name]),
+            )
+
+        return rgrid
+
     @classmethod
     def from_file(cls, json_path: Path) -> "RegularGrid":
         """
@@ -278,9 +316,9 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         with open(json_path) as f:
-            pp_def = json.load(f)
+            pp_def = f.read()
 
-        return cls(**pp_def)
+        return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
 
     def to_file(self, json_path: Path):
         """

@@ -32,8 +32,7 @@ from typing import Annotated, Literal
 
 import numpy as np
 import shapely
-from morecantile.models import Tile as RegularTile
-from morecantile.models import TileMatrix
+from morecantile.models import Tile as RegularTile, TileMatrix
 from pydantic import AfterValidator, BaseModel, NonNegativeFloat, NonNegativeInt
 from shapely.geometry import Polygon
 

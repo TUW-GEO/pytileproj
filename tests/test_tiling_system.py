@@ -23,9 +23,9 @@ osr.UseExceptions()
 def e7eu_grid_t1():
     return RegularTiling(
         name="e7eut1",
-        extent=[0, 0, 8660000, 6020000],
+        extent=[0, 0, 8_660_000, 6_020_000],
         sampling=10,
-        tile_shape_px=(10000, 10000),
+        tile_shape_px=(10_000, 10_000),
         tiling_level=1,
         axis_orientation=["E", "S"],
     )
@@ -35,9 +35,9 @@ def e7eu_grid_t1():
 def e7eu_grid_t3():
     return RegularTiling(
         name="e7eut3",
-        extent=[0, 0, 8660000, 6020000],
+        extent=[0, 0, 8_660_000, 6_020_000],
         sampling=20,
-        tile_shape_px=(15000, 15000),
+        tile_shape_px=(15_000, 15_000),
         tiling_level=0,
         axis_orientation=["E", "S"],
     )
@@ -47,9 +47,9 @@ def e7eu_grid_t3():
 def e7eu_grid_invalid():
     return RegularTiling(
         name="e7_invalid",
-        extent=[0, 0, 300000, 300000],
+        extent=[0, 0, 300_000, 300_000],
         sampling=20,
-        tile_shape_px=(15000, 15000),
+        tile_shape_px=(15_000, 15_000),
         tiling_level=2,
         axis_orientation=["E", "S"],
     )
@@ -94,7 +94,7 @@ def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling
 
     assert len(gsb) == 2
 
-    json_path = Path("gsb.json")
+    json_path = Path("test_gridsystembase.json")
     gsb.to_file(json_path)
     gsb2 = TilingSystemBase.from_file(json_path)
 
