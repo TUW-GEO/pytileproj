@@ -30,7 +30,7 @@ import json
 import sys
 from collections.abc import Generator
 from pathlib import Path
-from typing import Annotated, NamedTuple
+from typing import Annotated, Literal, NamedTuple
 
 import numpy as np
 import pyproj
@@ -805,6 +805,22 @@ def validate_tilings(tilings: dict[int, RegularTiling], congruent: bool):
         ref_tiling = tiling
 
 
+class RPTSDefinition(BaseModel):
+    """Stores a definition for a specific Regular Projected Tiling System."""
+
+    name: str
+    epsg: int
+    extent: tuple[float, float, float, float]
+    axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
+
+
+class RegularTilingDefinition(BaseModel):
+    """Stores a definition for a specific Regular Tiling System."""
+
+    name: str
+    tile_size: float | int
+
+
 class RegularProjTilingSystem(ProjTilingSystemBase):
     """Regular projected, multi-level tiling system."""
 
@@ -821,6 +837,71 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
                 self.tilings[tiling_level].tm
                 for tiling_level in sorted(self.tiling_levels)
             ],
+        )
+
+    @classmethod
+    def from_sampling(
+        cls,
+        sampling: float | int | dict[int, float | int],
+        rpts_def: RPTSDefinition,
+        tiling_defs: dict[int, RegularTilingDefinition],
+        allowed_samplings: dict[int, list[float | int]] | None = None,
+        congruent: bool = False,
+    ) -> "RegularProjTilingSystem":
+        """
+        Creates a regular, projected tiling system instance from given tiling system definitions and a grid sampling.
+
+        Parameters
+        ----------
+        rpts_def: RPTSDefinition
+            Regular, projected tiling system definition (stores name, EPSG code, extent, and axis orientation).
+        sampling: float | int | Dict[int, float | int]
+            Grid sampling/pixel size specified as a single value or a dictionary with tiling levels as keys and samplings as values.
+        tiling_defs: Dict[int, RegularTilingDefinition]
+            Tiling definition (stores name/tiling level and tile size).
+        allowed_samplings: Dict[int, List[float | int]] | None, optional
+            Dictionary with tiling levels as keys and allowed samplings as values. Defaults to None, which means there are no restrictions for the specified sampling.
+        congruent: bool, optional
+            If true, then tilings from adjacent tiling levels need to be congruent, which means that tiles from the higher tiling level need to be exactly in one tile of the lower level.
+            Defaults to false.
+
+        Returns
+        -------
+        RegularProjTilingSystem
+            Regular, projected tiling system instance.
+
+        """
+
+        if isinstance(sampling, dict):
+            samplings = sampling
+        else:
+            samplings = {}
+            samplings[1] = sampling
+
+        tilings = {}
+        for k, s in samplings.items():
+            tiling_def = tiling_defs.get(k, None)
+            if tiling_def is None:
+                raise ValueError(
+                    f"There is no tile definition for the tiling level {k}"
+                )
+            tile_size_px = int(tiling_def.tile_size / s)
+            tiling = RegularTiling(
+                name=tiling_def.name,
+                extent=rpts_def.extent,
+                sampling=s,
+                tile_shape_px=(tile_size_px, tile_size_px),
+                tiling_level=k,
+                axis_orientation=rpts_def.axis_orientation,
+            )
+            tilings[k] = tiling
+
+        return cls(
+            name=rpts_def.name,
+            epsg=rpts_def.epsg,
+            tilings=tilings,
+            congruent=congruent,
+            allowed_samplings=allowed_samplings,
         )
 
     @model_validator(mode="after")
