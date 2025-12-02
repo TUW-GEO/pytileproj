@@ -26,8 +26,10 @@
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
 
-import sys
-from typing import Union
+"""Tile module defining regular and irregular tiles."""
+
+from collections.abc import Sequence
+from typing import Any, Union
 
 import numpy as np
 import pyproj
@@ -37,7 +39,7 @@ from osgeo import ogr, osr
 from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
 
-from pytileproj._const import DECIMALS
+from pytileproj._const import DECIMALS, VIS_INSTALLED
 from pytileproj.geom import (
     ij2xy,
     round_polygon_vertices,
@@ -46,6 +48,14 @@ from pytileproj.geom import (
     xy2ij,
 )
 from pytileproj.proj import pyproj_to_cartopy_crs, transform_coords
+
+if VIS_INSTALLED:
+    import cartopy
+    import cartopy.crs as ccrs
+    import cartopy.feature
+    import matplotlib.axes as mplax
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon as PolygonPatch
 
 
 class IrregularTile(BaseModel):
@@ -57,7 +67,8 @@ class IrregularTile(BaseModel):
 
     _boundary: shapely.Polygon
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
+        """Initialise irrengular tile object."""
         super().__init__(**kwargs)
 
         min_x, min_y, max_x, max_y = self.extent
@@ -77,10 +88,12 @@ class IrregularTile(BaseModel):
         return self._boundary
 
 
-def _align_geom():
-    """
-    A decorator which checks if a spatial reference is available for an `OGR.geometry` object and optionally reprojects
-    the given geometry to the spatial reference of the projected tile.
+def _align_geom():  # noqa: ANN202
+    """Align external geometries.
+
+    A decorator which checks if a spatial reference is available for an
+    `OGR.geometry` object and optionally reprojects the given geometry to the
+    spatial reference of the projected tile.
 
     Returns
     -------
@@ -93,9 +106,8 @@ def _align_geom():
 
     """
 
-    def decorator(f, *args, **kwargs):
-        """
-        Decorator calling wrapper function.
+    def decorator(f: callable, *args, **kwargs) -> callable:  # noqa: ARG001, ANN002, ANN003, D417
+        """Call wrapper function.
 
         Parameters
         ----------
@@ -109,14 +121,20 @@ def _align_geom():
 
         """
 
-        def wrapper(self: "RasterTile", geom: ogr.Geometry, *args, **kwargs):
+        def wrapper(  # noqa: ANN202
+            self: "RasterTile",
+            geom: ogr.Geometry,
+            *args: Sequence[Any],
+            **kwargs: dict[str, Any],
+        ):
             geom = geom.boundary_ogr if isinstance(geom, RasterTile) else geom
             other_sref = geom.GetSpatialReference()
             if other_sref is None:
                 err_msg = "Spatial reference of the given geometry is not set."
                 raise AttributeError(err_msg)
 
-            # warp the geometry to the spatial reference of the tile if they are not the same
+            # warp the geometry to the spatial reference of the tile
+            # if they are not the same
             if hasattr(self, "epsg"):
                 this_sref = osr.SpatialReference()
                 this_sref.ImportFromEPSG(self.epsg)
@@ -154,22 +172,22 @@ class RasterTile(BaseModel):
     _boundary: ogr.Geometry
     _crs: pyproj.CRS
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
+        """Initialise raster tile object."""
         super().__init__(**kwargs)
         self._crs = pyproj.CRS.from_epsg(self.epsg)
         self._boundary = self.__ogr_boundary()
 
     @classmethod
-    def from_extent(
+    def from_extent(  # noqa: D417
         cls,
         extent: tuple[float, float, float, float],
         epsg: int,
         x_pixel_size: int,
         y_pixel_size: int,
-        **kwargs,
+        **kwargs: dict[str, Any],
     ) -> "RasterTile":
-        """
-        Initialises raster tile from a given extent and projection information.
+        """Initialise raster tile from a given extent and projection information.
 
         Parameters
         ----------
@@ -199,15 +217,15 @@ class RasterTile(BaseModel):
 
     @classmethod
     @_align_geom()
-    def from_geometry(
+    def from_geometry(  # noqa: D417
         cls,
         geom: ogr.Geometry,
-        x_pixel_size: int | float,
-        y_pixel_size: int | float,
-        **kwargs,
+        x_pixel_size: float,
+        y_pixel_size: float,
+        **kwargs: dict[str, Any],
     ) -> "RasterTile":
-        """
-        Creates a raster tile object from an existing geometry object.
+        """Create a raster tile object from an existing geometry object.
+
         Since a raster tile can represent rectangles only, non-rectangular
         shapely objects get converted into their bounding boxes.
 
@@ -227,10 +245,10 @@ class RasterTile(BaseModel):
 
         Notes
         -----
-        The upper-left corner of the geometry/extent is assumed to be the (pixel) origin.
+        The upper-left corner of the geometry/extent is assumed to be the
+        (pixel) origin.
 
         """
-
         epsg = pyproj.CRS(geom.GetSpatialReference().ExportToWkt()).to_epsg()
 
         geom_ch = geom.ConvexHull()
@@ -240,9 +258,10 @@ class RasterTile(BaseModel):
 
     @property
     def ori(self) -> float:
-        """
-        Counter-clockwise orientation of the raster tile in radians with respect to the
-        W-E direction/horizontal.
+        """Counter-clockwise orientation of the raster tile.
+
+        Counter-clockwise orientation of the raster tile in radians
+        with respect to the W-E direction/horizontal.
 
         """
         return -np.arctan2(self.geotrans[2], self.geotrans[1])
@@ -312,12 +331,22 @@ class RasterTile(BaseModel):
 
     @property
     def h_pixel_size(self) -> float:
-        """Pixel size in W-E direction (equal to `x_pixel_size` if the raster tile is axis-parallel)."""
+        """Pixel size in W-E direction.
+
+        Pixel size in W-E direction (equal to `x_pixel_size`
+        if the raster tile is axis-parallel).
+
+        """
         return self.x_pixel_size / np.cos(self.ori)
 
     @property
     def v_pixel_size(self) -> float:
-        """Pixel size in N-S direction (equal to `y_pixel_size` if the raster tile is axis-parallel)."""
+        """Pixel size in N-S direction.
+
+        Pixel size in N-S direction (equal to `y_pixel_size`
+        if the raster tile is axis-parallel).
+
+        """
         return self.y_pixel_size / np.cos(self.ori)
 
     @property
@@ -342,12 +371,18 @@ class RasterTile(BaseModel):
 
     @property
     def shape(self) -> tuple[int, int]:
-        """Returns the shape of the raster tile, which is defined by the height and width in pixels."""
+        """Return shape of the raster tile.
+
+        Return the shape of the raster tile, which is defined by
+        the height and width in pixels.
+
+        """
         return self.height, self.width
 
     @property
     def coord_extent(self) -> tuple[float, float, float, float]:
-        """
+        """Return coordinate extent.
+
         Extent of the raster tile with the pixel origins defined during initialisation
         (min_x, min_y, max_x, max_y).
 
@@ -361,7 +396,8 @@ class RasterTile(BaseModel):
 
     @property
     def outer_boundary_extent(self) -> tuple[float, float, float, float]:
-        """
+        """Return extent.
+
         Outer extent of the raster tile containing every pixel
         (min_x, min_y, max_x, max_y).
 
@@ -379,7 +415,7 @@ class RasterTile(BaseModel):
 
     @property
     def size(self) -> int:
-        """Number of pixels covered by the raster tile."""
+        """Return number of pixels covered by the raster tile."""
         return self.width * self.height
 
     @property
@@ -396,8 +432,9 @@ class RasterTile(BaseModel):
         tuple[float, float],
         tuple[float, float],
     ]:
-        """
-        4-list of 2-tuples : A tuple containing all corners (convex hull, pixel extent) in a clock-wise order
+        """Return corner coordinate tuples of the extent.
+
+        A tuple containing all corners (convex hull, pixel extent) in a clock-wise order
         (lower left, lower right, upper right, upper left).
 
         """
@@ -405,8 +442,7 @@ class RasterTile(BaseModel):
         ur_x, ur_y = self.rc2xy(0, self.n_cols - 1, px_origin="ur")
         lr_x, lr_y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr")
         ul_x, ul_y = self.rc2xy(0, 0, px_origin="ul")
-        corner_pts = ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
-        return corner_pts
+        return ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
 
     @property
     def coord_corners(
@@ -417,44 +453,42 @@ class RasterTile(BaseModel):
         tuple[float, float],
         tuple[float, float],
     ]:
-        """
-        A tuple containing all corners (convex hull, coordinate extent) in a clock-wise order
-        (lower left, lower right, upper right, upper left).
+        """Return corner coordinate tuples.
+
+        A tuple containing all corners (convex hull, coordinate extent)
+        in a clock-wise order (lower left, lower right, upper right, upper left).
 
         """
-        corner_pts = (
+        return (
             (self.ll_x, self.ll_y),
             (self.ul_x, self.ul_y),
             (self.ur_x, self.ur_y),
             (self.lr_x, self.lr_y),
         )
-        return corner_pts
 
     @property
     def x_coords(self) -> np.ndarray:
-        """Returns all coordinates in X direction."""
+        """Return all coordinates in X direction."""
         if self.is_axis_parallel:
             min_x, _ = self.rc2xy(0, 0)
             max_x, _ = self.rc2xy(0, self.n_cols)
             return np.arange(min_x, max_x, self.x_pixel_size)
-        else:
-            cols = np.array(range(self.n_cols))
-            return self.rc2xy(0, cols)[0]
+        cols = np.array(range(self.n_cols))
+        return self.rc2xy(0, cols)[0]
 
     @property
     def y_coords(self) -> np.ndarray:
-        """Returns all coordinates in Y direction."""
+        """Return all coordinates in Y direction."""
         if self.is_axis_parallel:
             _, min_y = self.rc2xy(self.n_rows, 0)
             _, max_y = self.rc2xy(0, 0)
             return np.arange(max_y, min_y, -self.y_pixel_size)
-        else:
-            rows = np.array(range(self.n_rows))
-            return self.rc2xy(rows, 0)[1]
+        rows = np.array(range(self.n_rows))
+        return self.rc2xy(rows, 0)[1]
 
     @property
     def xy_coords(self) -> tuple[np.ndarray, np.ndarray]:
-        """Returns meshgrid of both X and Y coordinates."""
+        """Return meshgrid of both X and Y coordinates."""
         if self.is_axis_parallel:
             x_coords, y_coords = np.meshgrid(
                 self.x_coords, self.y_coords, indexing="ij"
@@ -469,12 +503,12 @@ class RasterTile(BaseModel):
 
     @property
     def boundary_ogr(self) -> ogr.Geometry:
-        """Returns OGR geometry representation of the boundary of the raster tile."""
+        """Return OGR geometry representation of the boundary of the raster tile."""
         return self._boundary
 
     @property
     def boundary_wkt(self) -> str:
-        """Returns Well Known Text (WKT) representation of the boundary of the raster tile."""
+        """Return Well Known Text (WKT) of the boundary of the raster tile."""
         return self._boundary.ExportToWkt()
 
     @property
@@ -484,8 +518,7 @@ class RasterTile(BaseModel):
 
     @_align_geom()
     def intersects(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
-        """
-        Evaluates if the raster tile instance and another geometry intersect.
+        """Evaluate if the raster tile instance and another geometry intersect.
 
         Parameters
         ----------
@@ -502,8 +535,7 @@ class RasterTile(BaseModel):
 
     @_align_geom()
     def touches(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
-        """
-        Evaluates if the raster tile instance and another geometry touch each other.
+        """Evaluate if the raster tile instance and another geometry touch each other.
 
         Parameters
         ----------
@@ -522,8 +554,7 @@ class RasterTile(BaseModel):
 
     @_align_geom()
     def within(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
-        """
-        Evaluates if the raster tile is fully within another geometry.
+        """Evaluate if the raster tile is fully within another geometry.
 
         Parameters
         ----------
@@ -540,8 +571,7 @@ class RasterTile(BaseModel):
 
     @_align_geom()
     def overlaps(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
-        """
-        Evaluates if a geometry overlaps with the raster tile.
+        """Evaluate if a geometry overlaps with the raster tile.
 
         Parameters
         ----------
@@ -557,10 +587,11 @@ class RasterTile(BaseModel):
         return self._boundary.Overlaps(other)
 
     def xy2rc(
-        self, x: float, y: float, epsg: int = None, px_origin: str = None
+        self, x: float, y: float, epsg: int | None = None, px_origin: str | None = None
     ) -> tuple[int, int]:
-        """
-        Calculates an index of a pixel in which a given point of a world system lies.
+        """Convert world system to pixels coordinates.
+
+        Calculate an index of a pixel in which a given point of a world system lies.
 
         Parameters
         ----------
@@ -591,7 +622,6 @@ class RasterTile(BaseModel):
         Rounds to the closest, lower integer.
 
         """
-
         if epsg is not None:
             sref = pyproj.CRS.from_epsg(epsg)
             x, y = transform_coords(x, y, sref, self._crs)
@@ -599,10 +629,13 @@ class RasterTile(BaseModel):
         c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
         return r, c
 
-    def rc2xy(self, r: int, c: int, px_origin: str = None) -> tuple[float, float]:
-        """
-        Returns the coordinates of the center or a corner (depending on ˋpx_originˋ) of a pixel specified
-        by a row and column number.
+    def rc2xy(
+        self, r: int, c: int, px_origin: str | None = None
+    ) -> tuple[float, float]:
+        """Convert pixels to world system coordinates.
+
+        Returns the coordinates of the center or a corner (depending on
+        'px_origin') of a pixel specified by a row and column number.
 
         Parameters
         ----------
@@ -627,47 +660,53 @@ class RasterTile(BaseModel):
             World system coordinate in Y direction.
 
         """
-
         px_origin = self.px_origin if px_origin is None else px_origin
         return ij2xy(c, r, self.geotrans, origin=px_origin)
 
-    def plot(
+    def plot(  # noqa: PLR0913
         self,
-        ax=None,
+        *,
+        ax: Union["mplax.Axes", None] = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
         edgewidth: float = 1,
         alpha: float = 1.0,
-        proj=None,
+        proj: Union["ccrs.CRS", None] = None,
         show: bool = False,
         label_tile: bool = False,
         add_country_borders: bool = True,
-        extent: bool = None,
-    ):
-        """
-        Plots the boundary of the raster tile on a map.
+        extent: tuple | None = None,
+    ) -> "mplax.Axes":
+        """Plot the boundary of the raster tile on a map.
 
         Parameters
         ----------
         ax : matplotlib.pyplot.axes
             Pre-defined Matplotlib axis.
         facecolor : str, optional
-            Color code as described at https://matplotlib.org/3.1.0/tutorials/colors/colors.html (default is 'tab:red').
+            Color code as described at:
+              https://matplotlib.org/3.1.0/tutorials/colors/colors.html.
+            Defaults to 'tab:red'.
         edgecolor : str, optional
-            Color code as described at https://matplotlib.org/3.1.0/tutorials/colors/colors.html (default is 'black').
+            Color code as described at:
+              https://matplotlib.org/3.1.0/tutorials/colors/colors.html.
+            Defaults to 'black'.
         edgewidth : float, optional
             Width the of edge line (defaults to 1).
         alpha : float, optional
             Opacity (default is 1.).
         proj : cartopy.crs, optional
-            Cartopy projection instance defining the projection of the axes (default is None).
-            If None, the projection of the spatial reference system of the raster tile is taken.
+            Cartopy projection instance defining the projection of the axes.
+            Defaults to None, which means the projection of the spatial
+            reference system of the raster tile is taken.
         show : bool, optional
             If True, the plot result is shown (default is False).
         label_tile : bool, optional
-            If True, the geometry name is plotted at the center of the raster geometry (default is False).
+            If True, the geometry name is plotted at the center of the raster geometry.
+            Defaults to fale.
         add_country_borders : bool, optional
-            If True, country borders are added to the plot (`cartopy.feature.BORDERS`) (default is False).
+            If True, country borders are added to the plot (`cartopy.feature.BORDERS`).
+            Defaults to false.
         extent : tuple or list, optional
             Coordinate/map extent of the plot, given as [min_x, min_y, max_x, max_y]
             (default is None, meaning global extent).
@@ -675,24 +714,19 @@ class RasterTile(BaseModel):
         Returns
         -------
         matplotlib.pyplot.axes
-            Matplotlib axis containing a Cartopy map with the plotted raster tile boundary.
+            Matplotlib axis containing a Cartopy map with the plotted raster tile
+            boundary.
 
         """
-
-        if "matplotlib" in sys.modules and "cartopy" in sys.modules:
-            import cartopy
-            import cartopy.feature
-            import matplotlib.pyplot as plt
-            from matplotlib.patches import Polygon as PolygonPatch
-        else:
-            err_msg = "Modules 'matplotlib' and 'cartopy' are mandatory for plotting a raster tile object."
+        if not VIS_INSTALLED:
+            err_msg = (
+                "Modules 'matplotlib' and 'cartopy' are mandatory "
+                "for plotting a projected tiling system object."
+            )
             raise ImportError(err_msg)
 
         this_proj = pyproj_to_cartopy_crs(self._crs)
-        if proj is None:
-            other_proj = this_proj
-        else:
-            other_proj = proj
+        other_proj = this_proj if proj is None else proj
 
         if ax is None:
             ax = plt.axes(projection=other_proj)
@@ -719,7 +753,7 @@ class RasterTile(BaseModel):
             ax.set_ylim([extent[1], extent[3]])
 
         if self.name is not None and label_tile:
-            transform = this_proj._as_mpl_transform(ax)
+            transform = this_proj._as_mpl_transform(ax)  # noqa: SLF001
             ax.annotate(
                 str(self.name),
                 xy=self.centre,
@@ -736,18 +770,15 @@ class RasterTile(BaseModel):
     def __ogr_boundary(self) -> ogr.Geometry:
         """Outer boundary of the raster geometry as an OGR polygon."""
         boundary = Polygon(self.outer_boundary_corners)
-        boundary_ogr = shapely_to_ogr_polygon(boundary, self.epsg)
-
-        return boundary_ogr
+        return shapely_to_ogr_polygon(boundary, self.epsg)
 
     @_align_geom()
     def __contains__(self, geom: ogr.Geometry) -> bool:
-        """
-        Evaluates if the given geometry is fully within the raster tile.
+        """Evaluate if the given geometry is fully within the raster tile.
 
         Parameters
         ----------
-        other : ogr.Geometry | RasterTile
+        geom : ogr.Geometry | RasterTile
             Other geometry to evaluate a within operation with.
 
         Returns
@@ -758,9 +789,16 @@ class RasterTile(BaseModel):
         """
         return geom.Within(self._boundary)
 
+    def __hash__(self) -> str:
+        """Return class hash."""
+        this_corners = np.around(
+            np.array(self.outer_boundary_corners), decimals=DECIMALS
+        )
+        return hash((this_corners, self.n_rows, self.n_cols))
+
     def __eq__(self, other: "RasterTile") -> bool:
-        """
-        Checks if this and another raster tile are equal.
+        """Check if this and another raster tile are equal.
+
         Equality holds true if the vertices, rows and columns are the same.
 
         Parameters
@@ -787,8 +825,8 @@ class RasterTile(BaseModel):
         )
 
     def __ne__(self, other: "RasterTile") -> bool:
-        """
-        Checks if this and another raster tile are not equal.
+        """Check if this and another raster tile are not equal.
+
         Non-equality holds true if the vertices, rows or columns differ.
 
         Parameters
@@ -802,7 +840,6 @@ class RasterTile(BaseModel):
             True if both raster tiles are the not the same, otherwise false.
 
         """
-
         return not self == other
 
     def __str__(self) -> str:
@@ -810,12 +847,12 @@ class RasterTile(BaseModel):
         return self.boundary_wkt
 
     def __deepcopy__(self, memo: dict) -> "RasterTile":
-        """
-        Deepcopy method of a raster tile object.
+        """Deepcopy method of a raster tile object.
 
         Parameters
         ----------
         memo : dict
+            Variable storage for deepcopy method.
 
         Returns
         -------
@@ -823,8 +860,7 @@ class RasterTile(BaseModel):
             Deepcopy of a raster tile.
 
         """
-
-        proj_tile_cp = RasterTile(
+        return RasterTile(
             epsg=self.epsg,
             n_rows=self.n_rows,
             n_cols=self.n_cols,
@@ -832,8 +868,6 @@ class RasterTile(BaseModel):
             px_origin=self.px_origin,
             name=self.name,
         )
-
-        return proj_tile_cp
 
 
 if __name__ == "__main__":

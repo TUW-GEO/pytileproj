@@ -45,12 +45,10 @@ dev = ["ipykernel>=7.1.0",
  "ty>=0.0.1a27",
 ]
 
-
-[tool.ruff]
-# Same as Black.
+[tool.black]
 line-length = 88
-indent-width = 4
-
+target-version = ["py312"]
+skip-string-normalization = false
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -62,11 +60,9 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 
-
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402"]
 "**/{tests}/*" = ["E402", "ANN201", "D", "INP001", "S101"]
-
 
 [tool.ruff.format]
 # Same as Black.
@@ -76,7 +72,6 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-format = false
 docstring-code-line-length = "dynamic"
-
 
 [tool.pytest.ini_options]
 addopts = "--cov=pytileproj --cov-report term-missing -rsx --verbose --color=yes"

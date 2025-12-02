@@ -27,7 +27,7 @@ check-types:
     uv run ty check
 
 # lint, format with ruff and type-check with ty
-check: check-lint check-format check-types
+check: check-format check-lint check-types
 
 # run tests with coverage
 test:

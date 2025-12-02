@@ -40,7 +40,7 @@ def poly_spitzbergen() -> ogr.Geometry:
     return poly
 
 
-def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska):
+def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska: ogr.Geometry):
     result = split_polygon_by_antimeridian(poly_siberia_alaska, great_circle=False)
 
     assert math.isclose(
@@ -50,7 +50,7 @@ def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska):
     )
 
 
-def test_split_polygon_by_am_spitzbergen(poly_spitzbergen):
+def test_split_polygon_by_am_spitzbergen(poly_spitzbergen: ogr.Geometry):
     result = split_polygon_by_antimeridian(poly_spitzbergen)
 
     assert math.isclose(

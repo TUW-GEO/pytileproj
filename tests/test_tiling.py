@@ -36,12 +36,14 @@ def test_reg_grid(reg_grid: RegularTiling):
 
 def test_iter_reg_tiles(reg_grid: RegularTiling):
     test_tile = None
+    x_should, y_should = 4, 2
+    i_stop = x_should * reg_grid.n_tiles_y + y_should
     for i, tile in enumerate(reg_grid):
-        if i == 38:
+        if i == i_stop:
             test_tile = tile
             break
 
-    assert (test_tile.x, test_tile.y, test_tile.z) == (4, 2, 0)
+    assert (test_tile.x, test_tile.y, test_tile.z) == (x_should, y_should, 0)
 
 
 def test_to_ogc(reg_grid: RegularTiling):
@@ -84,8 +86,9 @@ def test_neighbours(irreg_grid: IrregularTiling):
 
 def test_iter_irreg_tiles(irreg_grid: IrregularTiling):
     test_tile = None
+    stop_idx = 1
     for i, tile in enumerate(irreg_grid):
-        if i == 1:
+        if i == stop_idx:
             test_tile = tile
             break
 

@@ -1,5 +1,36 @@
+# Copyright (c) 2025, TU Wien
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# The views and conclusions contained in the software and documentation are
+# those of the authors and should not be interpreted as representing official
+# policies, either expressed or implied, of the FreeBSD Project.
+
+"""Grid module defining regular and irregular grids."""
+
 import json
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -11,7 +42,12 @@ from pytileproj.tiling_system import (
 
 
 class RegularGrid(BaseModel, extra="allow"):
-    """Defines a collection of regular, projected, multi-level tiling systems sharing the same tiling scheme."""
+    """Define a regular grid.
+
+    A collection of regular, projected, multi-level tiling systems
+    sharing the same tiling scheme.
+
+    """
 
     _rpts_defs: dict[int, RPTSDefinition] | None = None
     _tiling_defs: dict[int, RegularTilingDefinition] | None = None
@@ -20,42 +56,42 @@ class RegularGrid(BaseModel, extra="allow"):
 
     _rpts_cls = RegularProjTilingSystem
 
-    def __init__(self, **kwargs):
-        """
-        Constructs a regular grid object from a collection of sub-grids represented by a dictionary of regular, projected tiling systems.
-
-        Parameters
-        ----------
-        tiling_systems: Dict[str, RegularProjTilingSystem] | None
-            Dictionary with the name of the tiling system as a key and a `RegularProjTilingSystem` instance as a value.
-
-        """
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
+        """Initialise a regular grid object."""
         super().__init__(**kwargs)
 
     @staticmethod
     def _create_rpts_from_def(
         rpts_def: RPTSDefinition,
-        sampling: float | int | dict[int, float | int],
+        sampling: float | dict[int, float | int],
         tiling_defs: dict[int, RegularTilingDefinition],
+        *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
         congruent: bool = False,
     ) -> RegularProjTilingSystem:
-        """
-        Creates a regular, projected tiling system instance from given tiling system definitions and a grid sampling.
+        """Create regular projected tiling system from grid definitions.
+
+        Create a regular, projected tiling system instance from given tiling system
+        definitions and a grid sampling.
 
         Parameters
         ----------
         rpts_def: RPTSDefinition
-            Regular, projected tiling system definition (stores name, EPSG code, extent, and axis orientation).
+            Regular, projected tiling system definition (stores name, EPSG code, extent,
+            and axis orientation).
         sampling: float | int | Dict[int, float | int]
-            Grid sampling/pixel size specified as a single value or a dictionary with tiling levels as keys and samplings as values.
+            Grid sampling/pixel size specified as a single value or a dictionary with
+            tiling levels as keys and samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
         allowed_samplings: Dict[int, List[float | int]] | None, optional
-            Dictionary with tiling levels as keys and allowed samplings as values. Defaults to None, which means there are no restrictions for the specified sampling.
+            Dictionary with tiling levels as keys and allowed samplings as values.
+            Defaults to None, which means there are no restrictions for the specified
+            sampling.
         congruent: bool, optional
-            If true, then tilings from adjacent tiling levels need to be congruent, which means that tiles from the higher tiling level need to be exactly in one tile of the lower level.
-            Defaults to false.
+            If true, then tilings from adjacent tiling levels need to be congruent,
+            which means that tiles from the higher tiling level need to be exactly
+            in one tile of the lower level. Defaults to false.
 
         Returns
         -------
@@ -70,28 +106,36 @@ class RegularGrid(BaseModel, extra="allow"):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | int | dict[int, float | int],
+        sampling: float | dict[int, float | int],
         rpts_defs: dict[str, RPTSDefinition],
         tiling_defs: dict[int, RegularTilingDefinition],
+        *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
         congruent: bool = False,
     ) -> "RegularGrid":
-        """
-        Creates a regular grid instance from given tiling system definitions and a grid sampling.
+        """Create a regular grid from grid definitions.
+
+        Create a regular grid instance from given tiling system definitions
+        and a grid sampling.
 
         Parameters
         ----------
         sampling: float | int | Dict[int, float | int]
-            Grid sampling/pixel size specified as a single value or a dictionary with tiling levels as keys and samplings as values.
-        rpts_def: RPTSDefinition
-            Regular, projected tiling system definition (stores name, EPSG code, extent, and axis orientation).
+            Grid sampling/pixel size specified as a single value or a dictionary
+            with tiling levels as keys and samplings as values.
+        rpts_defs: RPTSDefinition
+            Regular, projected tiling system definition (stores name, EPSG code,
+            extent, and axis orientation).
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
         allowed_samplings: Dict[int, List[float | int]] | None, optional
-            Dictionary with tiling levels as keys and allowed samplings as values. Defaults to None, which means there are no restrictions for the specified sampling.
+            Dictionary with tiling levels as keys and allowed samplings as values.
+            Defaults to None, which means there are no restrictions for the
+            specified sampling.
         congruent: bool, optional
-            If true, then tilings from adjacent tiling levels need to be congruent, which means that tiles from the higher tiling level need to be exactly in one tile of the lower level.
-            Defaults to false.
+            If true, then tilings from adjacent tiling levels need to be congruent,
+            which means that tiles from the higher tiling level need to be exactly
+            in one tile of the lower level. Defaults to false.
 
         Returns
         -------
@@ -115,17 +159,20 @@ class RegularGrid(BaseModel, extra="allow"):
 
     @classmethod
     def from_grid_def(
-        cls, json_path: Path, sampling: float | int | dict[int, float | int]
+        cls, json_path: Path, sampling: float | dict[int, float | int]
     ) -> "RegularGrid":
-        """
-        Creates a regular grid instance from given tiling system definitions stored in a JSON file and a grid sampling.
+        """Create a regular grid from a grid definition file.
+
+        Create a regular grid instance from given tiling system definitions stored
+        in a JSON file and a grid sampling.
 
         Parameters
         ----------
         json_path: Path
             Path to JSON file storing grid definition.
         sampling: float | int | Dict[int, float | int]
-            Grid sampling/pixel size specified as a single value or a dictionary with tiling levels as keys and samplings as values.
+            Grid sampling/pixel size specified as a single value or a dictionary with
+            tiling levels as keys and samplings as values.
 
         Returns
         -------
@@ -133,7 +180,7 @@ class RegularGrid(BaseModel, extra="allow"):
             Regular grid instance.
 
         """
-        with open(json_path) as f:
+        with json_path.open() as f:
             grid_def = json.load(f)
 
         rpts_defs = {
@@ -165,13 +212,16 @@ class RegularGrid(BaseModel, extra="allow"):
         dict[int, list[float | int]],
         bool,
     ]:
-        """
-        Creates required regular tiling system definitions from the tiling systems of the regular grid.
+        """Create regular grid system definitions.
+
+        Create required regular tiling system definitions from the tiling systems
+        of the regular grid.
 
         Returns
         -------
         RPTSDefinition
-            Regular, projected tiling system definition (stores name, EPSG code, extent, and axis orientation).
+            Regular, projected tiling system definition (stores name, EPSG code, extent,
+            and axis orientation).
         Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
         Dict[int, List[float | int]]
@@ -181,8 +231,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
         Notes
         -----
-        Attention:
-        The returned tiling definitions will only represent the tiling levels, which fit to the allowed samplings and the sampling of the current regular grid instance.
+        The returned tiling definitions will only represent the tiling levels, which fit
+        to the allowed samplings and the sampling of the current regular grid instance.
 
         """
         rpts_defs = {}
@@ -215,14 +265,24 @@ class RegularGrid(BaseModel, extra="allow"):
 
         return rpts_defs, tiling_defs, allowed_samplings, congruent
 
-    def _fetch_ori_grid_def(self):
-        """
-        Creates regular tiling system definitions from the attributes stored in the regular grid.
+    def _fetch_ori_grid_def(
+        self,
+    ) -> tuple[
+        dict[str, RPTSDefinition],
+        dict[int, RegularTilingDefinition],
+        dict[int, list[float | int]],
+        bool,
+    ]:
+        """Create regular grid system definitions.
+
+        Create regular grid definitions from the attributes
+        stored in the regular grid.
 
         Returns
         -------
         RPTSDefinition
-            Regular, projected tiling system definition (stores name, EPSG code, extent, and axis orientation).
+            Regular, projected tiling system definition (stores name, EPSG code,
+            extent, and axis orientation).
         Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
         Dict[int, List[float | int]]
@@ -236,9 +296,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
         return rpts_def, tilings_def, self._allowed_samplings, self._congruent
 
-    def to_grid_def(self, json_path: Path):
-        """
-        Writes the regular grid definition to a JSON file.
+    def to_grid_def(self, json_path: Path) -> None:
+        """Write the regular grid definition to a JSON file.
 
         Parameters
         ----------
@@ -261,7 +320,7 @@ class RegularGrid(BaseModel, extra="allow"):
         grid_def["allowed_samplings"] = allowed_samplings
         grid_def["congruent"] = congruent
         grid_def = json.dumps(grid_def, indent=2)
-        with open(json_path, "w") as f:
+        with json_path.open("w") as f:
             f.writelines(grid_def)
 
     @staticmethod
@@ -270,8 +329,7 @@ class RegularGrid(BaseModel, extra="allow"):
         rgrid_cls: "RegularGrid",
         rpts_cls: RegularProjTilingSystem,
     ) -> "RegularGrid":
-        """
-        Creates a regular grid object from the JSON class representation.
+        """Create a regular grid object from the JSON class representation.
 
         Parameters
         ----------
@@ -301,8 +359,10 @@ class RegularGrid(BaseModel, extra="allow"):
 
     @classmethod
     def from_file(cls, json_path: Path) -> "RegularGrid":
-        """
-        Creates a regular grid instance from its JSON representation stored within the given file.
+        """Create a regular grid instance from a file.
+
+        Create a regular grid instance from its JSON representation stored
+        within the given file.
 
         Parameters
         ----------
@@ -315,14 +375,13 @@ class RegularGrid(BaseModel, extra="allow"):
             Regular grid instance.
 
         """
-        with open(json_path) as f:
+        with json_path.open() as f:
             pp_def = f.read()
 
         return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
 
-    def to_file(self, json_path: Path):
-        """
-        Writes the JSON representation of the regular grid instance to a file.
+    def to_file(self, json_path: Path) -> None:
+        """Write the JSON representation of the regular grid instance to a file.
 
         Parameters
         ----------
@@ -331,12 +390,11 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         pp_def = self.model_dump_json(indent=2)
-        with open(json_path, "w") as f:
+        with json_path.open("w") as f:
             f.writelines(pp_def)
 
     def __getitem__(self, name: str) -> RegularProjTilingSystem:
-        """
-        Returns a regular, projected tiling system instance.
+        """Return a regular, projected tiling system instance.
 
         Parameters
         ----------

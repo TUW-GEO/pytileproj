@@ -99,16 +99,28 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         """Origin of the tiling."""
         return (
             self.extent[0],
-            self.extent[3]
-            if self.corner_of_origin == CornerOfOrigin.top_left.value
-            else self.extent[0],
+            (
+                self.extent[3]
+                if self.corner_of_origin == CornerOfOrigin.top_left.value
+                else self.extent[0]
+            ),
             self.extent[1],
         )
 
     @property
     def n_tiles(self) -> int:
         """Number of tiles in the tiling."""
-        return self._tm.matrixHeight * self._tm.matrixWidth
+        return self.n_tiles_x * self.n_tiles_y
+
+    @property
+    def n_tiles_x(self) -> int:
+        """Number of tiles in X direction."""
+        return self._tm.matrixWidth
+
+    @property
+    def n_tiles_y(self) -> int:
+        """Number of tiles in Y direction."""
+        return self._tm.matrixHeight
 
     @property
     def tm(self) -> TileMatrix:

@@ -79,9 +79,8 @@ def e7grid(e7eu_grid_t1: RegularTiling, e7af_grid_t1: RegularTiling):
         tilings={e7af_grid_t1.tiling_level: e7af_grid_t1},
         epsg=27701,
     )
-    rgrid = RegularGrid(**{rpts_eu.name: rpts_eu, rpts_af.name: rpts_af})
 
-    return rgrid
+    return RegularGrid(**{rpts_eu.name: rpts_eu, rpts_af.name: rpts_af})
 
 
 def test_io_grid_def(e7grid: RegularGrid):
@@ -125,10 +124,10 @@ def test_tiling_defs_multi(
     e7grid_from_def = RegularGrid.from_grid_def(json_path, 10)
     json_path.unlink()
 
-    assert e7grid_from_def._rpts_defs == e7grid_to_def._rpts_defs
-    assert e7grid_from_def._tiling_defs == e7grid_to_def._tiling_defs
-    assert e7grid_from_def._allowed_samplings == e7grid_to_def._allowed_samplings
-    assert e7grid_from_def._congruent == e7grid_to_def._congruent
+    assert e7grid_from_def._rpts_defs == e7grid_to_def._rpts_defs  # noqa: SLF001
+    assert e7grid_from_def._tiling_defs == e7grid_to_def._tiling_defs  # noqa: SLF001
+    assert e7grid_from_def._allowed_samplings == e7grid_to_def._allowed_samplings  # noqa: SLF001
+    assert e7grid_from_def._congruent == e7grid_to_def._congruent  # noqa: SLF001
 
 
 def test_tiling_defs_multi_sampling_diff(
@@ -181,7 +180,7 @@ def test_tiling_defs_multi_mismatch(
     e7grid_from_def = RegularGrid.from_grid_def(json_path, 10)
     json_path.unlink()
 
-    assert len(e7grid_from_def._tiling_defs) == 1
+    assert len(e7grid_from_def._tiling_defs) == 1  # noqa: SLF001
 
 
 if __name__ == "__main__":
