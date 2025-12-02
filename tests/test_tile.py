@@ -2,7 +2,6 @@ import copy
 import random
 import sys
 
-import cartopy.crs as ccrs
 import numpy as np
 import pytest
 import shapely.wkt as swkt
@@ -13,15 +12,18 @@ from pytileproj._const import DECIMALS
 from pytileproj.geom import get_geog_sref
 from pytileproj.tile import RasterTile
 
+if "cartopy" in sys.modules:
+    import cartopy.crs as ccrs
+
 osr.UseExceptions()
 
 
 @pytest.fixture(scope="session")
 def ref_extent() -> tuple:
-    ll_x = random.randrange(-50, 50, 10)
-    ll_y = random.randrange(-50, 50, 10)
-    ur_x = ll_x + random.randrange(10, 50, 10)
-    ur_y = ll_y + random.randrange(10, 50, 10)
+    ll_x = random.randrange(-50, 50, 10)  # noqa: S311
+    ll_y = random.randrange(-50, 50, 10)  # noqa: S311
+    ur_x = ll_x + random.randrange(10, 50, 10)  # noqa: S311
+    ur_y = ll_y + random.randrange(10, 50, 10)  # noqa: S311
 
     return tuple(map(float, (ll_x, ll_y, ur_x, ur_y)))
 
@@ -52,7 +54,7 @@ def ref_proj_tile(ref_extent: tuple, epsg: int, pixel_size: float) -> RasterTile
     return RasterTile.from_extent(ref_extent, epsg, pixel_size, pixel_size)
 
 
-def assert_extent(this_extent, other_extent):
+def assert_extent(this_extent: tuple, other_extent: tuple):
     this_extent = np.around(np.array(this_extent), decimals=DECIMALS)
     other_extent = np.around(np.array(other_extent), decimals=DECIMALS)
     assert np.all(this_extent == other_extent)
@@ -110,7 +112,7 @@ def test_x_coords(ref_proj_tile: RasterTile):
         == ref_proj_tile.rc2xy(0, ref_proj_tile.n_cols - 1)[0]
     )
     assert ref_proj_tile.x_coords[0] == ref_proj_tile.rc2xy(0, 0)[0]
-    rand_idx = random.randrange(1, ref_proj_tile.n_cols - 2, 1)
+    rand_idx = random.randrange(1, ref_proj_tile.n_cols - 2, 1)  # noqa: S311
     assert ref_proj_tile.x_coords[rand_idx] == ref_proj_tile.rc2xy(0, rand_idx)[0]
 
 
@@ -121,7 +123,7 @@ def test_y_coords(ref_proj_tile: RasterTile):
         == ref_proj_tile.rc2xy(ref_proj_tile.n_rows - 1, 0)[1]
     )
     assert ref_proj_tile.y_coords[0] == ref_proj_tile.rc2xy(0, 0)[1]
-    rand_idx = random.randrange(1, ref_proj_tile.n_rows - 2, 1)
+    rand_idx = random.randrange(1, ref_proj_tile.n_rows - 2, 1)  # noqa: S311
     assert ref_proj_tile.y_coords[rand_idx] == ref_proj_tile.rc2xy(rand_idx, 0)[1]
 
 
@@ -167,8 +169,8 @@ def test_touches(
 
 
 def test_coord_conversion(ref_proj_tile: RasterTile):
-    r_0 = random.randint(0, ref_proj_tile.n_rows)
-    c_0 = random.randint(0, ref_proj_tile.n_cols)
+    r_0 = random.randint(0, ref_proj_tile.n_rows)  # noqa: S311
+    c_0 = random.randint(0, ref_proj_tile.n_cols)  # noqa: S311
 
     x, y = ref_proj_tile.rc2xy(r_0, c_0)
     r, c = ref_proj_tile.xy2rc(x, y)
@@ -197,23 +199,21 @@ def test_different_sref(
     assert ref_proj_tile.touches(geom)
 
 
+@pytest.mark.vis_installed
 def test_plot(ref_proj_tile: RasterTile):
-    if "matplotlib" in sys.modules:
-        ref_proj_tile.plot(add_country_borders=True)
+    ref_proj_tile.plot(add_country_borders=True)
 
-        # test plotting with labelling and different output projection
-        ref_proj_tile_cp = copy.deepcopy(ref_proj_tile)
-        ref_proj_tile_cp.name = "E048N018T1"
-        ref_proj_tile_cp.plot(
-            proj=ccrs.EckertI(), label_tile=True, add_country_borders=True
-        )
+    # test plotting with labelling and different output projection
+    ref_proj_tile_cp = copy.deepcopy(ref_proj_tile)
+    ref_proj_tile_cp.name = "E048N018T1"
+    ref_proj_tile_cp.plot(
+        proj=ccrs.EckertI(), label_tile=True, add_country_borders=True
+    )
 
-        # test plotting with different input projection
-        extent = [527798, 94878, 956835, 535687]
-        proj_tile = RasterTile.from_extent(
-            extent, 3857, x_pixel_size=500, y_pixel_size=500
-        )
-        proj_tile.plot(add_country_borders=True)
+    # test plotting with different input projection
+    extent = [527798, 94878, 956835, 535687]
+    proj_tile = RasterTile.from_extent(extent, 3857, x_pixel_size=500, y_pixel_size=500)
+    proj_tile.plot(add_country_borders=True)
 
 
 def test_equal(

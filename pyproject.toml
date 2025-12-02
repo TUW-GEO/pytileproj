@@ -1,10 +1,10 @@
 [project]
 authors = [{ name = "TU Wien", email = "remote.sensing@geo.tuwien.ac.at" }]
 name = "pytileproj"
-dynamic = ["version"]
+version = "0.1.0"
 description = "Framework for working with hierarchical, projected tiling systems."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic",
     "gdal",
@@ -13,7 +13,7 @@ dependencies = [
     "morecantile >= 7",
     "requests",
     "pillow",
-    "antimeridian >= 0.4.5" 
+    "antimeridian >= 0.4.5"
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -33,38 +33,53 @@ Repository = "https://github.com/TUW-GEO/pytileproj"
 vis = ["matplotlib", "cartopy"]
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
 
 [dependency-groups]
-test = [
-    "pytest",
-    "pytest-cov"
+dev = ["ipykernel>=7.1.0",
+ "mystmd>=1.6.6",
+ "pytest>=9.0.1",
+ "pytest-cov>=7.0.0",
+ "ruff>=0.14.5",
+ "ty>=0.0.1a27",
 ]
-trunk = []
 
-[tool.black]
-line-length = 88
-target-version = ["py312"]
-skip-string-normalization = false
 
 [tool.ruff]
+# Same as Black.
 line-length = 88
-target-version = "py312"
+indent-width = 4
 
-lint.select = ["E", "F", "I", "B", "UP", "N"]
-lint.ignore = [
-  "E501", # ignore line length warnings because Black handles that
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # missing-trailing-comma (may conflict with ruff formatter)
+    "D203",    # incorrect-blank-line-before-class (conflicts with D211)
+    "D213",    # multi-line-summary-second-line (conflicts with D212)
 ]
+fixable = ["ALL"]
+unfixable = []
 
-# Optional: autofix simple issues when running `ruff check --fix`
-fix = true
 
-[tool.ruff.lint.isort]
-known-first-party = ["pytileproj"]
-combine-as-imports = true
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"**/{tests}/*" = ["E402", "ANN201", "D", "INP001", "S101"]
 
-[tool.setuptools_scm]
-# For smarter version schemes and other configuration options,
-# check out https://github.com/pypa/setuptools_scm
-version_scheme = "no-guess-dev"
+
+[tool.ruff.format]
+# Same as Black.
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
+
+
+[tool.pytest.ini_options]
+addopts = "--cov=pytileproj --cov-report term-missing -rsx --verbose --color=yes"
+
+[tool.coverage.run]
+relative_files = true

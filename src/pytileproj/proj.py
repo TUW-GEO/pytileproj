@@ -26,19 +26,25 @@
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
 
+"""Utility module for projections."""
+
 import json
+import sys
 import warnings
 
-import cartopy.crs as ccrs
 import pyproj
 import requests
 from osgeo import ogr, osr
 from shapely.geometry import MultiPolygon, Polygon
 
+from pytileproj._const import TIMEOUT
+
+if "cartopy" not in sys.modules:
+    import cartopy.crs as ccrs
+
 
 def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
-    """
-    Fetches the zone polygon of the given projection from the EPSG database.
+    """Fetch the zone polygon of the given projection from the EPSG database.
 
     Parameters
     ----------
@@ -59,7 +65,7 @@ def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
     epsg_extent_url = "https://apps.epsg.org/api/v1/Extent/"
 
     zone_geom = None
-    code_resp = requests.get(f"{epsg_code_url}/{epsg}/")
+    code_resp = requests.get(f"{epsg_code_url}/{epsg}/", timeout=TIMEOUT)
     if code_resp.ok:
         code_data = json.loads(code_resp.content)
         code_usages = code_data["Usage"]
@@ -68,7 +74,8 @@ def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
                 warnings.warn("Multiple EPSG code usages found!", stacklevel=1)
             code_usage = code_usages[-1]
             extent_resp = requests.get(
-                f'{epsg_extent_url}/{code_usage["Extent"]["Code"]}/polygon'
+                f"{epsg_extent_url}/{code_usage['Extent']['Code']}/polygon",
+                timeout=TIMEOUT,
             )
             if extent_resp.ok:
                 extent_data = json.loads(extent_resp.content)
@@ -79,16 +86,16 @@ def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
                 elif geom_type == "MultiPolygon":
                     zone_geom = MultiPolygon(coords)
                 else:
-                    raise ValueError(f"Geometry type '{geom_type}' not supported.")
+                    err_msg = f"Geometry type '{geom_type}' not supported."
+                    raise ValueError(err_msg)
                 zone_geom = ogr.CreateGeometryFromWkt(zone_geom.wkt)
                 zone_geom.AssignSpatialReference(get_geog_sref())
 
     return zone_geom
 
 
-def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> ccrs.CRS:
-    """
-    Converts a pyproj to a cartopy CRS object.
+def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
+    """Convert a pyproj to a cartopy CRS object.
 
     Parameters
     ----------
@@ -113,96 +120,80 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> ccrs.CRS:
         proj4_params.get("lat_2", 50.0),
     )
 
-    if proj4_name == "longlat":
-        ccrs_proj = ccrs.PlateCarree(central_longitude)
-    elif proj4_name == "aeqd":
-        ccrs_proj = ccrs.AzimuthalEquidistant(
+    ccrs_lut = {
+        "longlat": ccrs.PlateCarree(central_longitude),
+        "aeqd": ccrs.AzimuthalEquidistant(
             central_longitude, central_latitude, false_easting, false_northing
-        )
-    elif proj4_name == "merc":
-        ccrs_proj = ccrs.Mercator(
+        ),
+        "merc": ccrs.Mercator(
             central_longitude,
             false_easting=false_easting,
             false_northing=false_northing,
             scale_factor=scale_factor,
-        )
-    elif proj4_name == "eck1":
-        ccrs_proj = ccrs.EckertI(central_longitude, false_easting, false_northing)
-    elif proj4_name == "eck2":
-        ccrs_proj = ccrs.EckertII(central_longitude, false_easting, false_northing)
-    elif proj4_name == "eck3":
-        ccrs_proj = ccrs.EckertIII(central_longitude, false_easting, false_northing)
-    elif proj4_name == "eck4":
-        ccrs_proj = ccrs.EckertIV(central_longitude, false_easting, false_northing)
-    elif proj4_name == "eck5":
-        ccrs_proj = ccrs.EckertV(central_longitude, false_easting, false_northing)
-    elif proj4_name == "eck6":
-        ccrs_proj = ccrs.EckertVI(central_longitude, false_easting, false_northing)
-    elif proj4_name == "aea":
-        ccrs_proj = ccrs.AlbersEqualArea(
+        ),
+        "eck1": ccrs.EckertI(central_longitude, false_easting, false_northing),
+        "eck2": ccrs.EckertII(central_longitude, false_easting, false_northing),
+        "eck3": ccrs.EckertIII(central_longitude, false_easting, false_northing),
+        "eck4": ccrs.EckertIV(central_longitude, false_easting, false_northing),
+        "eck5": ccrs.EckertV(central_longitude, false_easting, false_northing),
+        "eck6": ccrs.EckertVI(central_longitude, false_easting, false_northing),
+        "aea": ccrs.AlbersEqualArea(
             central_longitude,
             central_latitude,
             false_easting,
             false_northing,
             standard_parallels,
-        )
-    elif proj4_name == "eqdc":
-        ccrs_proj = ccrs.EquidistantConic(
+        ),
+        "eqdc": ccrs.EquidistantConic(
             central_longitude,
             central_latitude,
             false_easting,
             false_northing,
             standard_parallels,
-        )
-    elif proj4_name == "gnom":
-        ccrs_proj = ccrs.Gnomonic(central_longitude, central_latitude)
-    elif proj4_name == "laea":
-        ccrs_proj = ccrs.LambertAzimuthalEqualArea(
+        ),
+        "gnom": ccrs.Gnomonic(central_longitude, central_latitude),
+        "laea": ccrs.LambertAzimuthalEqualArea(
             central_longitude, central_latitude, false_easting, false_northing
-        )
-    elif proj4_name == "lcc":
-        ccrs_proj = ccrs.LambertConformal(
+        ),
+        "lcc": ccrs.LambertConformal(
             central_longitude,
             central_latitude,
             false_easting,
             false_northing,
             standard_parallels=standard_parallels,
-        )
-    elif proj4_name == "mill":
-        ccrs_proj = ccrs.Miller(central_longitude)
-    elif proj4_name == "moll":
-        ccrs_proj = ccrs.Mollweide(
+        ),
+        "mill": ccrs.Miller(central_longitude),
+        "moll": ccrs.Mollweide(
             central_longitude,
             false_easting=false_easting,
             false_northing=false_northing,
-        )
-    elif proj4_name == "stere":
-        ccrs_proj = ccrs.Stereographic(
+        ),
+        "stere": ccrs.Stereographic(
             central_latitude,
             central_longitude,
             false_easting,
             false_northing,
             scale_factor=scale_factor,
-        )
-    elif proj4_name == "ortho":
-        ccrs_proj = ccrs.Orthographic(central_longitude, central_latitude)
-    elif proj4_name == "robin":
-        ccrs_proj = ccrs.Robinson(
+        ),
+        "ortho": ccrs.Orthographic(central_longitude, central_latitude),
+        "robin": ccrs.Robinson(
             central_longitude,
             false_easting=false_easting,
             false_northing=false_northing,
-        )
-    elif proj4_name == "sinus":
-        ccrs_proj = ccrs.Sinusoidal(central_longitude, false_easting, false_northing)
-    elif proj4_name == "tmerc":
-        ccrs_proj = ccrs.TransverseMercator(
+        ),
+        "sinus": ccrs.Sinusoidal(central_longitude, false_easting, false_northing),
+        "tmerc": ccrs.TransverseMercator(
             central_longitude,
             central_latitude,
             false_easting,
             false_northing,
             scale_factor,
-        )
-    else:
+        ),
+    }
+
+    ccrs_proj = ccrs_lut.get(proj4_name)
+
+    if ccrs_proj is None:
         err_msg = f"Projection '{proj4_name}' is not supported."
         raise ValueError(err_msg)
 
@@ -212,8 +203,7 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> ccrs.CRS:
 def transform_coords(
     x: float, y: float, this_crs: pyproj.CRS, other_crs: pyproj.CRS
 ) -> tuple[float, float]:
-    """
-    Transforms coordinate tuple from a given to another projection.
+    """Transform coordinate tuple from a given to another projection.
 
     Parameters
     ----------
@@ -239,8 +229,7 @@ def transform_coords(
 
 
 def get_geog_sref() -> osr.SpatialReference:
-    """
-    Creates OSR spatial reference object representing the LonLat projection.
+    """Create OSR spatial reference object representing the LonLat projection.
 
     Returns
     -------
