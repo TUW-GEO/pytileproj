@@ -100,7 +100,11 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         return RegularProjTilingSystem.from_sampling(
-            sampling, rpts_def, tiling_defs, allowed_samplings, congruent
+            sampling,
+            rpts_def,
+            tiling_defs,
+            allowed_samplings=allowed_samplings,
+            congruent=congruent,
         )
 
     @classmethod
@@ -146,7 +150,11 @@ class RegularGrid(BaseModel, extra="allow"):
         tiling_systems = {}
         for name, rpts_def in rpts_defs.items():
             tiling_systems[name] = cls._create_rpts_from_def(
-                rpts_def, sampling, tiling_defs, allowed_samplings, congruent
+                rpts_def,
+                sampling,
+                tiling_defs,
+                allowed_samplings=allowed_samplings,
+                congruent=congruent,
             )
 
         rgrid = cls(**tiling_systems)

@@ -942,7 +942,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
     @model_validator(mode="after")
     def check_tilings(self) -> "RegularProjTilingSystem":
         """Validate if different regular tilings are compliant with each other."""
-        validate_tilings(self.tilings, self.congruent)
+        validate_tilings(self.tilings, congruent=self.congruent)
         return self
 
     @property

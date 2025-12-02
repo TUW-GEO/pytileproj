@@ -39,7 +39,7 @@ from shapely.geometry import MultiPolygon, Polygon
 
 from pytileproj._const import TIMEOUT
 
-if "cartopy" not in sys.modules:
+if "cartopy" in sys.modules:
     import cartopy.crs as ccrs
 
 

@@ -27,7 +27,7 @@ def irreg_grid():
 
 
 def test_reg_ori(reg_grid: RegularTiling):
-    assert reg_grid.origin_xy == (0, 90)
+    assert reg_grid.origin_xy == (0, 0)
 
 
 def test_reg_grid(reg_grid: RegularTiling):
@@ -56,7 +56,7 @@ def test_to_ogc(reg_grid: RegularTiling):
         "scaleDenominator": 3571.4285714285716,
         "cellSize": 1.0,
         "cornerOfOrigin": "bottomLeft",
-        "pointOfOrigin": (0.0, 90.0),
+        "pointOfOrigin": (0.0, 0.0),
         "tileWidth": 10,
         "tileHeight": 10,
         "matrixWidth": 18,

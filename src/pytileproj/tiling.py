@@ -98,13 +98,9 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     def origin_xy(self) -> tuple:
         """Origin of the tiling."""
         return (
-            self.extent[0],
-            (
-                self.extent[3]
-                if self.corner_of_origin == CornerOfOrigin.top_left.value
-                else self.extent[0]
-            ),
-            self.extent[1],
+            (self.extent[0], self.extent[3])
+            if self.corner_of_origin == CornerOfOrigin.top_left.value
+            else (self.extent[0], self.extent[1])
         )
 
     @property
