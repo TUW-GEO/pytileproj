@@ -1,6 +1,7 @@
 # pytileproj
 
 ```{toctree}
+readme
 api
 authors
 changelog
