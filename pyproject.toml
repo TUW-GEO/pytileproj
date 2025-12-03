@@ -7,8 +7,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic",
-    "gdal",
-    "pyproj",
     "shapely",
     "morecantile >= 7",
     "requests",
@@ -31,6 +29,8 @@ Repository = "https://github.com/TUW-GEO/pytileproj"
 
 [project.optional-dependencies]
 vis = ["matplotlib", "cartopy"]
+docs = ["sphinx-book-theme", "sphinx-autodoc2"]
+geospatial = ["gdal", "pyproj"]
 
 [build-system]
 requires = ["uv_build>=0.9.6,<0.10.0"]
@@ -44,7 +44,7 @@ dev = ["ipykernel>=7.1.0",
  "ruff>=0.14.5",
  "ty>=0.0.1a27",
 ]
-docs = ["sphinx-book-theme", "sphinx-autodoc2"]
+
 
 [tool.black]
 line-length = 88
