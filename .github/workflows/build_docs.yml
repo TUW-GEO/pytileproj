@@ -35,14 +35,18 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: conda-incubator/setup-miniconda@v2.0.1
         with:
-          python-version-file: "pyproject.toml"
+            miniforge-variant: Mambaforge
+            miniforge-version: "latest"
+            channel-priority: flexible
+            python-version: 3.12
+            activate-environment: pytileproj
+            auto-activate-base: false
 
       - name: Install the project
         run: |
-            uv pip install --find-links https://girder.github.io/large_image_wheels gdal pyproj
+            mamba install -c conda-forge gdal pyproj
             uv sync --all-extras --dev
 
       - name: Create docs
