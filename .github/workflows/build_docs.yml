@@ -48,7 +48,7 @@ jobs:
 
       - name: Install the project
         run: |
-            mamba install -c conda-forge gdal pyproj
+            mamba install -c conda-forge gdal pyproj cartopy
             uv sync --all-extras --dev
 
       - name: Create docs
