@@ -55,6 +55,8 @@ jobs:
         run: |
             cd docs
             make html
+        env:
+            SPHINXBUILD: '/usr/share/miniconda/envs/pytileproj/bin/sphinx-build'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -29,7 +29,7 @@ Repository = "https://github.com/TUW-GEO/pytileproj"
 
 [project.optional-dependencies]
 vis = ["matplotlib", "cartopy"]
-docs = ["sphinx-book-theme", "sphinx-autodoc2"]
+docs = ["sphinx", "sphinx-book-theme", "sphinx-autodoc2"]
 geospatial = ["gdal", "pyproj"]
 
 [build-system]
