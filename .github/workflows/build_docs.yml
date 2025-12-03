@@ -39,8 +39,10 @@ jobs:
         with:
             miniforge-variant: Mambaforge
             miniforge-version: "latest"
-            channel-priority: flexible
+            auto-update-conda: true
+            channels: conda-forge,defaults
             python-version: 3.12
+            mamba-version: "*"
             activate-environment: pytileproj
             auto-activate-base: false
 
