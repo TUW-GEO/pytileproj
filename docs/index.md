@@ -1,6 +1,8 @@
 # pytileproj
 
 ```{toctree}
-notebooks/test.ipynb
-notebooks/test2.ipynb
+api
+authors
+changelog
+guides/tile.ipynb
 ```

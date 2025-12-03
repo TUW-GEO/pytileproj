@@ -29,7 +29,6 @@
 """Utility module for projections."""
 
 import json
-import sys
 import warnings
 
 import pyproj
@@ -37,9 +36,9 @@ import requests
 from osgeo import ogr, osr
 from shapely.geometry import MultiPolygon, Polygon
 
-from pytileproj._const import TIMEOUT
+from pytileproj._const import TIMEOUT, VIS_INSTALLED
 
-if "cartopy" in sys.modules:
+if VIS_INSTALLED:
     import cartopy.crs as ccrs
 
 

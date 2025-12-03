@@ -28,6 +28,7 @@
 
 """Tile module defining regular and irregular tiles."""
 
+import json
 from collections.abc import Sequence
 from typing import Any, Union
 
@@ -39,7 +40,7 @@ from osgeo import ogr, osr
 from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
 
-from pytileproj._const import DECIMALS, VIS_INSTALLED
+from pytileproj._const import DECIMALS, JSON_INDENT, VIS_INSTALLED
 from pytileproj.geom import (
     ij2xy,
     round_polygon_vertices,
@@ -51,7 +52,6 @@ from pytileproj.proj import pyproj_to_cartopy_crs, transform_coords
 
 if VIS_INSTALLED:
     import cartopy
-    import cartopy.crs as ccrs
     import cartopy.feature
     import matplotlib.axes as mplax
     import matplotlib.pyplot as plt
@@ -255,6 +255,27 @@ class RasterTile(BaseModel):
         geom_sh = shapely.wkt.loads(geom_ch.ExportToWkt())
         bbox = geom_sh.bounds
         return cls.from_extent(bbox, epsg, x_pixel_size, y_pixel_size, **kwargs)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "RasterTile":
+        """Create raster tile from JSON str.
+
+        Parameters
+        ----------
+        json_str: str
+            Raster tile represented by a JSON string.
+
+        Returns
+        -------
+        RasterTile
+            Raster tile.
+
+        """
+        return cls(**json.loads(json_str))
+
+    def to_json(self) -> str:
+        """Create JSON class representation."""
+        return self.model_dump_json(indent=JSON_INDENT)
 
     @property
     def ori(self) -> float:
@@ -671,11 +692,12 @@ class RasterTile(BaseModel):
         edgecolor: str = "black",
         edgewidth: float = 1,
         alpha: float = 1.0,
-        proj: Union["ccrs.CRS", None] = None,
+        proj: pyproj.CRS | None = None,
         show: bool = False,
         label_tile: bool = False,
         add_country_borders: bool = True,
         extent: tuple | None = None,
+        extent_proj: pyproj.CRS | None = None,
     ) -> "mplax.Axes":
         """Plot the boundary of the raster tile on a map.
 
@@ -695,8 +717,8 @@ class RasterTile(BaseModel):
             Width the of edge line (defaults to 1).
         alpha : float, optional
             Opacity (default is 1.).
-        proj : cartopy.crs, optional
-            Cartopy projection instance defining the projection of the axes.
+        proj : pyproj.CRS, optional
+            Pyproj projection instance defining the projection of the axes.
             Defaults to None, which means the projection of the spatial
             reference system of the raster tile is taken.
         show : bool, optional
@@ -710,6 +732,9 @@ class RasterTile(BaseModel):
         extent : tuple or list, optional
             Coordinate/map extent of the plot, given as [min_x, min_y, max_x, max_y]
             (default is None, meaning global extent).
+        extent_proj : pyproj.CRS | None
+            Projection of the given extent. If it is None, then it is assumed that
+            'extent' is referring to the native projection of the raster tile.
 
         Returns
         -------
@@ -726,7 +751,7 @@ class RasterTile(BaseModel):
             raise ImportError(err_msg)
 
         this_proj = pyproj_to_cartopy_crs(self._crs)
-        other_proj = this_proj if proj is None else proj
+        other_proj = this_proj if proj is None else pyproj_to_cartopy_crs(proj)
 
         if ax is None:
             ax = plt.axes(projection=other_proj)
@@ -749,8 +774,12 @@ class RasterTile(BaseModel):
         ax.add_patch(patch)
 
         if extent is not None:
-            ax.set_xlim([extent[0], extent[2]])
-            ax.set_ylim([extent[1], extent[3]])
+            dst_crs = proj or self._crs
+            src_crs = extent_proj or self._crs
+            min_x, min_y = transform_coords(extent[0], extent[1], src_crs, dst_crs)
+            max_x, max_y = transform_coords(extent[2], extent[3], src_crs, dst_crs)
+            ax.set_xlim([min_x, max_x])
+            ax.set_ylim([min_y, max_y])
 
         if self.name is not None and label_tile:
             transform = this_proj._as_mpl_transform(ax)  # noqa: SLF001

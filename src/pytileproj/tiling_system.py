@@ -41,7 +41,7 @@ from morecantile.models import TileMatrixSet
 from osgeo import ogr, osr
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
-from pytileproj._const import VIS_INSTALLED
+from pytileproj._const import JSON_INDENT, VIS_INSTALLED
 from pytileproj.geom import (
     convert_any_to_geog_ogr_geom,
     get_geog_sref,
@@ -300,7 +300,7 @@ class TilingSystemBase(BaseModel):
             Path to JSON file.
 
         """
-        pp_def = self.model_dump_json(indent=2)
+        pp_def = self.model_dump_json(indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(pp_def)
 

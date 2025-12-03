@@ -34,6 +34,7 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
+from pytileproj._const import JSON_INDENT
 from pytileproj.tiling_system import (
     RegularProjTilingSystem,
     RegularTilingDefinition,
@@ -327,7 +328,7 @@ class RegularGrid(BaseModel, extra="allow"):
         grid_def["tiling_defs"] = tiling_defs
         grid_def["allowed_samplings"] = allowed_samplings
         grid_def["congruent"] = congruent
-        grid_def = json.dumps(grid_def, indent=2)
+        grid_def = json.dumps(grid_def, indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(grid_def)
 
@@ -397,7 +398,7 @@ class RegularGrid(BaseModel, extra="allow"):
             Path to JSON file.
 
         """
-        pp_def = self.model_dump_json(indent=2)
+        pp_def = self.model_dump_json(indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
