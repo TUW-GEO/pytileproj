@@ -202,12 +202,12 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
         with path.open("w") as f:
             f.writelines(geojson)
 
-    def __contains__(self, geom: ogr.Geometry) -> bool:
+    def __contains__(self, geom: ogr.Geometry | ProjCoord) -> bool:
         """Evaluate if the given geometry is fully within the projection zone.
 
         Parameters
         ----------
-        geom : ogr.Geometry
+        geom : ogr.Geometry | ProjCoord
             Other geometry to evaluate a within operation with.
 
         Returns
@@ -216,10 +216,21 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
             True if the given geometry is within the projection zone, false if not.
 
         """
-        other_sref = geom.GetSpatialReference()
-        if other_sref is None:
-            err_msg = "Spatial reference of the given geometry is not set."
-            raise AttributeError(err_msg)
+        if isinstance(geom, ogr.Geometry):
+            other_sref = geom.GetSpatialReference()
+            if other_sref is None:
+                err_msg = "Spatial reference of the given geometry is not set."
+                raise AttributeError(err_msg)
+        elif isinstance(geom, ProjCoord):
+            point = shapely.Point((geom.x, geom.y))
+            other_sref = osr.SpatialReference()
+            other_sref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            other_sref.ImportFromEPSG(geom.epsg)
+            geom = ogr.CreateGeometryFromWkt(point.wkt)
+            geom.AssignSpatialReference(other_sref)
+        else:
+            err_msg = f"Geometry type {type(geom)} is not supported."
+            raise TypeError(err_msg)
 
         geog_sref = get_geog_sref()
         if not geog_sref.IsSame(other_sref):
@@ -424,6 +435,73 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
     tiles_in_zone_only: bool = True
 
+    def create_tile_from_lonlat(
+        self, lon: float, lat: float, tiling_level: int
+    ) -> RasterTile:
+        """Create a raster tile object from geographic coordinates.
+
+        Parameters
+        ----------
+        lon: float
+            Longitude.
+        lat: float
+            Latitude.
+        tiling_level: int
+            Tiling level or zoom.
+
+        Returns
+        -------
+        RasterTile
+            Raster tile object.
+
+        """
+        geog_coord = ProjCoord(lon, lat, 4326)
+        return self.create_tile_from_coord(geog_coord, tiling_level)
+
+    def create_tile_from_xy(self, x: float, y: float, tiling_level: int) -> RasterTile:
+        """Create a raster tile object from projected coordinates.
+
+        Parameters
+        ----------
+        x: float
+            World system coordinate in X direction.
+        y: float
+            World system coordinate in Y direction.
+        tiling_level: int
+            Tiling level or zoom.
+
+        Returns
+        -------
+        RasterTile
+            Raster tile object.
+
+        """
+        proj_coord = ProjCoord(x, y, self.epsg)
+        return self.create_tile_from_coord(proj_coord, tiling_level)
+
+    def create_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+        """Create a raster tile object from projected coordinates.
+
+        Parameters
+        ----------
+        coord: ProjCoord
+            Projected coordinates object.
+        tiling_level: int
+            Tiling level or zoom.
+
+        Returns
+        -------
+        RasterTile
+            Raster tile object.
+
+        Raises
+        ------
+        NotImplementedError
+            This function needs to be overwritten by a child class.
+
+        """
+        raise NotImplementedError
+
     def create_tile(self, tilename: str) -> RasterTile:
         """Create a raster tile object from a given tilename.
 
@@ -587,6 +665,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         proj: Union["ccrs.CRS", None] = None,
         show: bool = False,
         label_tile: bool = False,
+        label_size: int = 12,
         add_country_borders: bool = True,
         extent: tuple | None = None,
         plot_zone: bool = False,
@@ -620,6 +699,8 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         label_tile : bool, optional
             If True, the geometry name is plotted at the center of the raster geometry.
             Defaults to false.
+        label_size: int, optional
+            Fontsize of the tile labels. Defaults to 12.
         add_country_borders : bool, optional
             If True, country borders are added to the plot (`cartopy.feature.BORDERS`).
             Defaults to false.
@@ -680,6 +761,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
                         xycoords=transform,
                         va="center",
                         ha="center",
+                        fontsize=label_size,
                     )
 
         if extent is not None:
@@ -1139,6 +1221,31 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             raster_tile = None
 
         return raster_tile
+
+    def create_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+        """Create a raster tile object from projected coordinates.
+
+        Parameters
+        ----------
+        coord: ProjCoord
+            Projected coordinates object.
+        tiling_level: int
+            Tiling level or zoom.
+
+        Returns
+        -------
+        RasterTile
+            Raster tile object.
+
+        """
+        tile = self._tms.tile(
+            coord.x,
+            coord.y,
+            tiling_level,
+            geographic_crs=pyproj.CRS.from_epsg(coord.epsg),
+        )
+        tilename = self._create_tilename(tile)
+        return self._to_raster_tile(tile, name=tilename)
 
     def _to_raster_tile(self, tile: RegularTile, name: str | None = None) -> RasterTile:
         """Create a raster tile object from a given regular tile.

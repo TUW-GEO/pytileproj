@@ -2,6 +2,6 @@
 
 from pytileproj.grid import RegularGrid
 from pytileproj.tile import RasterTile
-from pytileproj.tiling_system import RegularProjTilingSystem
+from pytileproj.tiling_system import ProjCoord, RegularProjTilingSystem
 
-__all__ = ["RasterTile", "RegularGrid", "RegularProjTilingSystem"]
+__all__ = ["ProjCoord", "RasterTile", "RegularGrid", "RegularProjTilingSystem"]

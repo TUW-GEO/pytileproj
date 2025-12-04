@@ -25,6 +25,7 @@ autodoc2_packages = [
     "../src/pytileproj",  # path to your package
 ]
 autodoc2_render_plugin = "myst"
+autodoc2_hidden_objects = ["dunder", "undoc", "private", "inherited"]
 
 
 # Add any paths that contain templates here, relative to this directory.

@@ -1,11 +1,25 @@
 # pytileproj
 
 ```{toctree}
-:maxdepth: 2
+:hidden:
+:caption: 🔎 Overview
 
 readme
-api
+```
+
+```{toctree}
+:hidden:
+:caption: 📚 Guides
+
+guides/tile.ipynb
+guides/tile_system.ipynb
+```
+
+```{toctree}
+:hidden:
+:caption: 📖 Reference
+
 authors
 changelog
-guides/tile.ipynb
+api
 ```

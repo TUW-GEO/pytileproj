@@ -7,11 +7,12 @@ A python package for working with projected tiling systems.
 
 Projected tiling systems define a tiling scheme for multiple levels (tiling or zoom levels) in a certain projection. The whole concept can be disentangled into the following components:
 
-- *projection:* in `pytileproj`, a projection is represented via an EPSG code and a projection zone defining the validity of coordinates (optional)
-- *tiling:* a tiling is put on top of the projection to subdivide space into smaller units a.k.a. tiles.
-- *tiling_system:* multiple tilings covering the same extent are grouped into a tiling system.
-- *grid:* multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://tuw-geo.github.io/pytileproj).
-
+- *projection:* In `pytileproj`, a projection is represented via an EPSG code and a projection zone defining the validity of coordinates (optional).
+- *tiling:* A tiling is put on top of the projection to subdivide space into smaller units a.k.a. tiles. Tilings can be either regular or irregular:
+  - *irregular:* Tiles can have arbitrary shapes and the overall tiling does not need to cover a certain extent. The only restriction is that tiles are not allowed to intersect.
+  - *regular:* Tiles need to have the same shape and the regular tiling needs to fill a certain extent (no holes). The regular tiling follows the [OGC standard](https://docs.ogc.org/is/17-083r4/17-083r4.html).
+- *tiling_system:* Multiple tilings covering the same extent are grouped into a tiling system.
+- *grid:* Multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://tuw-geo.github.io/pytileproj).
 
 ## How does `geospade` fit into the geospatial stack?
 
