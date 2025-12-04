@@ -48,15 +48,15 @@ jobs:
 
       - name: Install the project
         run: |
-            mamba install -c conda-forge gdal pyproj cartopy
-            uv sync --dev --all-extras --no-extra geospatial
+            mamba install -c conda-forge gdal
+            uv sync --dev --all-extras --no-extra no-pip
 
       - name: Create docs
         run: |
             cd docs
             make html
         env:
-            SPHINXBUILD: '/usr/share/miniconda/envs/pytileproj/bin/sphinx-build'
+            SPHINXBUILD: 'python -m sphinx.cmd.build'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
