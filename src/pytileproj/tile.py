@@ -58,6 +58,9 @@ if VIS_INSTALLED:
     from matplotlib.patches import Polygon as PolygonPatch
 
 
+__all__ = ["RasterTile"]
+
+
 class IrregularTile(BaseModel):
     """Defines an irregular tile (arbitrary extent) at a specific zoom/tiling level."""
 

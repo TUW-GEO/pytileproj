@@ -48,6 +48,7 @@ jobs:
             source /usr/share/miniconda/bin/activate pytileproj
             mamba install -c conda-forge gdal uv
             uv pip install -r pyproject.toml --extra vis --extra docs
+            uv pip install -e . --no-deps
             uv pip list
 
       - name: Create docs

@@ -42,6 +42,9 @@ if VIS_INSTALLED:
     import cartopy.crs as ccrs
 
 
+__all__ = ["get_geog_sref", "pyproj_to_cartopy_crs", "transform_coords"]
+
+
 def fetch_proj_zone(epsg: int) -> ogr.Geometry | None:
     """Fetch the zone polygon of the given projection from the EPSG database.
 

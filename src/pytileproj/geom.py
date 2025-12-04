@@ -42,6 +42,20 @@ from PIL import Image, ImageDraw
 from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM
 from pytileproj.proj import get_geog_sref
 
+__all__ = [
+    "convert_any_to_geog_ogr_geom",
+    "get_geog_intersection",
+    "ij2xy",
+    "rasterise_polygon",
+    "round_polygon_vertices",
+    "segmentize_geometry",
+    "shapely_to_ogr_polygon",
+    "split_polygon_by_antimeridian",
+    "transform_geom_to_geog",
+    "transform_geometry",
+    "xy2ij",
+]
+
 
 def xy2ij(
     x: float, y: float, geotrans: tuple, origin: str = "ul"

@@ -41,6 +41,8 @@ from shapely.geometry import Polygon
 
 from pytileproj.tile import IrregularTile
 
+__all__ = []
+
 
 class CornerOfOrigin(Enum):
     """Defines a corner of origin in an OGC compliant manner."""

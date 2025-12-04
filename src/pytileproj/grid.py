@@ -41,6 +41,8 @@ from pytileproj.tiling_system import (
     RPTSDefinition,
 )
 
+__all__ = ["RegularGrid"]
+
 
 class RegularGrid(BaseModel, extra="allow"):
     """Define a regular grid.

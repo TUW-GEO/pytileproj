@@ -1,34 +1,94 @@
-==========
-pytileproj
-==========
+# pytileproj
 
-.. image:: https://github.com/TUW-GEO/pytileproj/workflows/ubuntu/badge.svg
-   :target: https://github.com/TUW-GEO/pytileproj/actions/workflows/ubuntu.yml
+[![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/ubuntu/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/ubuntu.yml) [![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/windows/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/windows.yml) [![codecov](https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master)](https://coveralls.io/github/TUW-GEO/pytileproj?branch=master) [![pypi](https://badge.fury.io/py/pytileproj.svg)](https://badge.fury.io/py/pytileproj) [![docs](https://img.shields.io/badge/pytileproj-documentation-blue)](https://tuw-geo.github.io/pytileproj)
 
-.. image:: https://github.com/TUW-GEO/pytileproj/workflows/windows/badge.svg
-   :target: https://github.com/TUW-GEO/pytileproj/actions/workflows/windows.yml
 
-.. image:: https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master
-    :target: https://coveralls.io/github/TUW-GEO/pytileproj?branch=master
+A python package for working with projected tiling systems.
 
-.. image:: https://badge.fury.io/py/pytileproj.svg
-    :target: https://badge.fury.io/py/pytileproj
+Projected tiling systems define a tiling scheme for multiple levels (tiling or zoom levels) in a certain projection. The whole concept can be disentangled into the following components:
 
-.. image:: https://readthedocs.org/projects/pytileproj/badge/?version=latest
-    :target: https://pytileproj.readthedocs.io/en/latest/?badge=latest
+- *projection:* in `pytileproj`, a projection is represented via an EPSG code and a projection zone defining the validity of coordinates (optional)
+- *tiling:* a tiling is put on top of the projection to subdivide space into smaller units a.k.a. tiles.
+- *tiling_system:* multiple tilings covering the same extent are grouped into a tiling system.
+- *grid:* multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://tuw-geo.github.io/pytileproj).
 
-A python class for working with TiledProjectionSystems (TPS).
 
-It's a python package that handles the geometric and geographic operations of a gridded and tiled projection system.
-It was designed for data cubes ingesting satellite imagery and builds the basis for the Equi7Grid (see https://github.com/TUW-GEO/Equi7Grid).
+## How does `geospade` fit into the geospatial stack?
 
-It also includes a nice and handy realisation of the UTM/UPS grid system, using the TiledProjectionSystems (TPS) approach.
+`pytileproj` heavily relies on [morecantile](https://github.com/developmentseed/morecantile) and extends its capabilities into a more generic framework for representing geospatial datacubes. As long as compliance is possible, `pytileproj` follows OGC standards, but it is not limited to web map representations of tiling systems, e.g. a quadtree.
 
-Citation
-========
+## Installation
 
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.1042555.svg
-   :target: https://doi.org/10.5281/zenodo.1042555
+This package should be installable through pip:
+
+```bash
+pip install pytileproj
+```
+
+Install for `gdal` is required to be in place (can be installed via conda, mamba, or directly from a wheel).
+If you want to use `pytileproj`'s visualisation features, then you can install the required optional dependencies with:
+
+```bash
+pip install pytileproj[vis]
+```
+
+## Contribute
+
+We are happy if you want to contribute. Please raise an issue explaining what
+is missing or if you find a bug. We will also gladly accept pull requests
+against our master branch for new features or bug fixes.
+
+### Development setup
+
+For development you can either use a `conda/mamba` or `uv` environment.
+Here is an example using `mamba` together with `uv` for managing dependencies.
+
+First, install conda and set the path:
+
+```bash
+wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" -O miniforge.sh
+bash miniforge.sh -b -p $HOME/miniforge
+export PATH="$HOME/miniforge/bin:$PATH"
+```
+
+Next, create a virtual environment:
+
+```bash
+conda create -n pytileproj python=3.12 mamba
+source activate pytileproj
+```
+
+Install ``gdal` and `uv` with mamba:
+
+```bash
+mamba install -c conda-forge gdal uv
+```
+
+Finally, use `uv` to install all other dependencies and `pytileproj` itself:
+
+```bash
+uv pip install -r pyproject.toml --extra vis --extra docs
+uv pip install -e . --no-deps
+```
+
+After that you should be able to run `uv run pytest` to run the test suite.
+
+### Guidelines
+
+If you want to contribute please follow these steps:
+
+- fork the `pytileproj` repository to your account
+- clone the repository
+- make a new feature branch from the `pytileproj` master branch
+- add your feature
+- please include tests for your contributions in one of the test directories.
+  We use `pytest` so a simple function called `test_my_feature` is enough
+- submit a pull request to our master branch
+
+
+## Citation
+
+[![zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.1042555.svg)](https://doi.org/10.5281/zenodo.1042555)
 
 If you use the software in a publication then please cite it using the Zenodo DOI.
 Be aware that this badge links to the latest package version.
@@ -38,74 +98,3 @@ You should normally always use the DOI for the specific version of your record i
 This is to ensure that other researchers can access the exact research artefact you used for reproducibility.
 
 You can find additional information regarding DOI versioning at http://help.zenodo.org/#versioning
-
-Installation
-============
-
-This package should be installable through pip:
-
-.. code::
-
-    pip install pytileproj
-
-Installs for scipy and gdal are required from conda or conda-forge.
-
-Contribute
-==========
-
-We are happy if you want to contribute. Please raise an issue explaining what
-is missing or if you find a bug. We will also gladly accept pull requests
-against our master branch for new features or bug fixes.
-
-Development setup
------------------
-
-For Development we recommend a ``conda`` environment.
-
-Example installation script
----------------------------
-
-The following script will install miniconda and setup the environment on a UNIX
-like system. Miniconda will be installed into ``$HOME/miniconda``.
-
-.. code::
-
-   wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-   bash miniconda.sh -b -p $HOME/miniconda
-   export PATH="$HOME/miniconda/bin:$PATH"
-   conda create -n pytileproj_env python=3.6 numpy scipy pip gdal pyproj shapely
-   source activate pytileproj_env
-
-
-This script adds ``$HOME/miniconda/bin`` temporarily to the ``PATH`` to do this
-permanently add ``export PATH="$HOME/miniconda/bin:$PATH"`` to your ``.bashrc``
-or ``.zshrc``
-
-The last line in the example activates the ``pytileproj_env`` environment.
-
-After that you should be able to run:
-
-.. code::
-
-    python setup.py test
-
-to run the test suite.
-
-Guidelines
-----------
-
-If you want to contribute please follow these steps:
-
-- Fork the pytileproj repository to your account
-- Clone the repository
-- make a new feature branch from the pytileproj master branch
-- Add your feature
-- Please include tests for your contributions in one of the test directories.
-  We use py.test so a simple function called test_my_feature is enough
-- submit a pull request to our master branch
-
-Note
-====
-
-This project has been set up using PyScaffold 4.6. For details and usage
-information on PyScaffold see https://pyscaffold.org/.
