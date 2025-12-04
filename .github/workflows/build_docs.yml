@@ -52,7 +52,7 @@ jobs:
       - name: Check env
         run: |
             source /usr/share/miniconda/bin/activate pytileproj
-            pip list
+            uv pip list
 
       - name: Create docs
         run: |
