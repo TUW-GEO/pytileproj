@@ -45,9 +45,8 @@ jobs:
 
       - name: Install the project
         run: |
-            source /usr/share/miniconda/bin/activate pytileproj
             mamba install -c conda-forge gdal uv
-            uv sync --active --dev --all-extras --no-extra no-pip
+            uv sync --python $(which python) --dev --all-extras --no-extra no-pip
             uv pip list
 
       - name: Create docs
