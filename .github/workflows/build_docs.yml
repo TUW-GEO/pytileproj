@@ -48,11 +48,13 @@ jobs:
 
       - name: Install the project
         run: |
+            conda activate pytileproj
             mamba install -c conda-forge gdal
             uv sync --dev --all-extras --no-extra no-pip
 
       - name: Create docs
         run: |
+            conda activate pytileproj
             cd docs
             make html
         env:
