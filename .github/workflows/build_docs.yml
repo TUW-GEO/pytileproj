@@ -48,21 +48,22 @@ jobs:
             source /usr/share/miniconda/bin/activate pytileproj
             mamba install -c conda-forge gdal uv
             uv sync --python $(which python) --dev --all-extras --no-extra no-pip
+            uv pip install sphinx
             uv pip list
 
-      - name: Create docs
-        run: |
-            source /usr/share/miniconda/bin/activate pytileproj
-            cd docs
-            make html
-        env:
-            SPHINXBUILD: 'python -m sphinx.cmd.build'
+      #- name: Create docs
+      #  run: |
+      #      source /usr/share/miniconda/bin/activate pytileproj
+      #      cd docs
+      #      make html
+      #  env:
+      #      SPHINXBUILD: 'python -m sphinx.cmd.build'
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './_build/html'
+      #- name: Upload artifact
+      #  uses: actions/upload-pages-artifact@v3
+      #  with:
+      #    path: './_build/html'
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      #- name: Deploy to GitHub Pages
+      #  id: deployment
+      #  uses: actions/deploy-pages@v4
