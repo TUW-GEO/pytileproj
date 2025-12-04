@@ -52,6 +52,11 @@ jobs:
             mamba install -c conda-forge gdal
             uv sync --dev --all-extras --no-extra no-pip
 
+      - name: Check env
+        run: |
+            source /usr/share/miniconda/bin/activate pytileproj
+            pip list
+
       - name: Create docs
         run: |
             source /usr/share/miniconda/bin/activate pytileproj
