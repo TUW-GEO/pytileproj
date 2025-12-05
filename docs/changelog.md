@@ -1,2 +1,2 @@
-```{include} ../AUTHORS.md
+```{include} ../CHANGELOG.md
 ```

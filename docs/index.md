@@ -12,7 +12,8 @@ readme
 :caption: 📚 Guides
 
 guides/tile.ipynb
-guides/tile_system.ipynb
+guides/tiling_system.ipynb
+guides/grid.ipynb
 ```
 
 ```{toctree}

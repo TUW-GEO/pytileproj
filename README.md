@@ -12,7 +12,7 @@ Projected tiling systems define a tiling scheme for multiple levels (tiling or z
   - *irregular:* Tiles can have arbitrary shapes and the overall tiling does not need to cover a certain extent. The only restriction is that tiles are not allowed to intersect.
   - *regular:* Tiles need to have the same shape and the regular tiling needs to fill a certain extent (no holes). The regular tiling follows the [OGC standard](https://docs.ogc.org/is/17-083r4/17-083r4.html).
 - *tiling_system:* Multiple tilings covering the same extent are grouped into a tiling system.
-- *grid:* Multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://tuw-geo.github.io/pytileproj).
+- *grid:* Multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://github.com/TUW-GEO/Equi7Grid).
 
 ## How does `geospade` fit into the geospatial stack?
 
