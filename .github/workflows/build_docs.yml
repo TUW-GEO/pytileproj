@@ -32,28 +32,16 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v3
 
-      - uses: conda-incubator/setup-miniconda@v2.0.1
-        with:
-            miniforge-variant: Mambaforge
-            miniforge-version: "latest"
-            auto-update-conda: true
-            channels: conda-forge,defaults
-            python-version: 3.12
-            mamba-version: "*"
-            activate-environment: pytileproj
-            auto-activate-base: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Install the project
         run: |
-            source /usr/share/miniconda/bin/activate pytileproj
-            mamba install -c conda-forge gdal uv
-            uv pip install -r pyproject.toml --extra vis --extra docs
-            uv pip install -e . --no-deps
+            uv pip install -e . --extra vis --extra docs
             uv pip list
 
       - name: Create docs
         run: |
-            source /usr/share/miniconda/bin/activate pytileproj
             cd docs
             make html
         env:
