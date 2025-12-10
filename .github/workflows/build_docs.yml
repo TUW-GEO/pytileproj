@@ -46,7 +46,7 @@ jobs:
             cd docs
             make html
         env:
-            SPHINXBUILD: 'python -m sphinx.cmd.build'
+            SPHINXBUILD: 'uv run python -m sphinx.cmd.build'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
