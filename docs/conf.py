@@ -82,5 +82,6 @@ html_theme_options = {
     "switcher": {
         "json_url": "https://tuw-geo.github.io/pytileproj/switcher.json",
         "version_match": "latest",
-    }
+    },
+    "navbar_end": ["version-switcher"],
 }
