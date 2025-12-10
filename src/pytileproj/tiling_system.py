@@ -49,6 +49,7 @@ from pytileproj.projgeom import (
     fetch_proj_zone,
     pyproj_to_cartopy_crs,
     rasterise_polygon,
+    transform_coords,
     transform_geometry,
 )
 from pytileproj.tile import IrregularTile, RasterTile
@@ -56,7 +57,6 @@ from pytileproj.tiling import IrregularTiling, RegularTiling
 
 if VIS_INSTALLED:
     import cartopy
-    import cartopy.crs as ccrs
     import cartopy.feature
     import matplotlib.axes as mplax
     import matplotlib.pyplot as plt
@@ -577,12 +577,13 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         edgecolor: str = "black",
         edgewidth: int = 1,
         alpha: float = 1.0,
-        proj: Union["ccrs.CRS", None] = None,
+        proj: Any = None,  # noqa: ANN401
         show: bool = False,
         label_tile: bool = False,
         label_size: int = 12,
         add_country_borders: bool = True,
         extent: tuple | None = None,
+        extent_proj: Any = None,  # noqa: ANN401
         plot_zone: bool = False,
     ) -> "mplax.Axes":
         """Plot all tiles at a specific tiling level.
@@ -605,8 +606,8 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Width the of edge line (defaults to 1).
         alpha : float, optional
             Opacity (default is 1.).
-        proj : cartopy.crs, optional
-            Cartopy projection instance defining the projection of the axes.
+        proj : Any, optional
+            CRS defining the projection of the axes and pyproj.CRS can handle.
             Defaults to None, which means the projection of the spatial
             reference system of the projected tiling system is taken.
         show : bool, optional
@@ -622,6 +623,10 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         extent : tuple or list, optional
             Coordinate/map extent of the plot, given as
             [min_x, min_y, max_x, max_y] (default is None, meaning global extent).
+        extent_proj : Any, optional
+            CRS of the given extent. A projection definition pyproj.CRS can handle.
+            If it is None, then it is assumed that 'extent' is referring to the
+            native projection of the raster tile.
         plot_zone: bool, optional
             True if the projection zone should be added to the plot.
             False if not.
@@ -641,8 +646,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             )
             raise ImportError(err_msg)
 
-        this_proj = pyproj_to_cartopy_crs(self._crs)
-        other_proj = this_proj if proj is None else proj
+        this_proj = pyproj_to_cartopy_crs(self.pyproj_crs)
+        other_proj = (
+            this_proj
+            if proj is None
+            else pyproj_to_cartopy_crs(pyproj.CRS.from_user_input(proj))
+        )
 
         if ax is None:
             ax = plt.axes(projection=other_proj)
@@ -680,8 +689,20 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
                     )
 
         if extent is not None:
-            ax.set_xlim([extent[0], extent[2]])
-            ax.set_ylim([extent[1], extent[3]])
+            dst_crs = (
+                pyproj.CRS.from_user_input(proj)
+                if proj is not None
+                else self.pyproj_crs
+            )
+            src_crs = (
+                pyproj.CRS.from_user_input(extent_proj)
+                if extent_proj is not None
+                else self.pyproj_crs
+            )
+            min_x, min_y = transform_coords(extent[0], extent[1], src_crs, dst_crs)
+            max_x, max_y = transform_coords(extent[2], extent[3], src_crs, dst_crs)
+            ax.set_xlim([min_x, max_x])
+            ax.set_ylim([min_y, max_y])
 
         if plot_zone:
             transform = this_proj._as_mpl_transform(ax)  # noqa: SLF001

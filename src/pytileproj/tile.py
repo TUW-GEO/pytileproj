@@ -289,12 +289,12 @@ class RasterTile(BaseModel):
         with respect to the W-E direction/horizontal.
 
         """
-        return -np.arctan2(self.geotrans[2], self.geotrans[1])
+        return float(-np.arctan2(self.geotrans[2], self.geotrans[1]))
 
     @property
     def is_axis_parallel(self) -> bool:
         """True if the raster tile is not rotated , i.e. it is axis-parallel."""
-        return self.ori == 0.0
+        return bool(self.ori == 0.0)
 
     @property
     def ll_x(self) -> float:
@@ -557,7 +557,7 @@ class RasterTile(BaseModel):
             True if both geometries intersect, false if not.
 
         """
-        return shapely.intersects(self._boundary.geom, other.geom)
+        return bool(shapely.intersects(self._boundary.geom, other.geom))
 
     @_align_geom()
     def touches(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
@@ -574,9 +574,11 @@ class RasterTile(BaseModel):
             True if both geometries touch each other, false if not.
 
         """
-        return shapely.touches(
-            round_polygon_vertices(self._boundary.geom, DECIMALS),
-            round_polygon_vertices(other.geom, DECIMALS),
+        return bool(
+            shapely.touches(
+                round_polygon_vertices(self._boundary.geom, DECIMALS),
+                round_polygon_vertices(other.geom, DECIMALS),
+            )
         )
 
     @_align_geom()
@@ -594,7 +596,7 @@ class RasterTile(BaseModel):
             True if the raster tile is within the given geometry, false if not.
 
         """
-        return shapely.within(self._boundary.geom, other.geom)
+        return bool(shapely.within(self._boundary.geom, other.geom))
 
     @_align_geom()
     def overlaps(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
@@ -611,7 +613,7 @@ class RasterTile(BaseModel):
             True if the given geometry overlaps the raster tile, false if not.
 
         """
-        return shapely.overlaps(self._boundary.geom, other.geom)
+        return bool(shapely.overlaps(self._boundary.geom, other.geom))
 
     def xy2rc(
         self,
@@ -726,7 +728,7 @@ class RasterTile(BaseModel):
             Width the of edge line (defaults to 1).
         alpha : float, optional
             Opacity (default is 1.).
-        proj : pyproj.CRS | None
+        proj : Any, optional
             CRS defining the projection of the axes and pyproj.CRS can handle.
             Defaults to None, which means the projection of the spatial
             reference system of the raster tile is taken.
@@ -741,7 +743,7 @@ class RasterTile(BaseModel):
         extent : tuple or list, optional
             Coordinate/map extent of the plot, given as [min_x, min_y, max_x, max_y]
             (default is None, meaning global extent).
-        extent_proj : pyproj.CRS | Any
+        extent_proj : Any, optional
             CRS of the given extent. A projection definition pyproj.CRS can handle.
             If it is None, then it is assumed that 'extent' is referring to the
             native projection of the raster tile.
@@ -838,7 +840,7 @@ class RasterTile(BaseModel):
             True if the given geometry is within the raster tile, false if not.
 
         """
-        return shapely.within(other.geom, self._boundary.geom)
+        return bool(shapely.within(other.geom, self._boundary.geom))
 
     def __hash__(self) -> str:
         """Return class hash."""
@@ -869,7 +871,7 @@ class RasterTile(BaseModel):
         other_corners = np.around(
             np.array(other.outer_boundary_corners), decimals=DECIMALS
         )
-        return (
+        return bool(
             np.all(this_corners == other_corners)
             and self.n_rows == other.n_rows
             and self.n_cols == other.n_cols

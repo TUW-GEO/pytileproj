@@ -43,7 +43,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "pytileproj"
-copyright = "2025, TUWGEO"  # noqa: A001
+copyright = "2025, TU Wien"  # noqa: A001
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
