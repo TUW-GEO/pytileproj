@@ -59,7 +59,7 @@ def e7eu_psb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
     return ProjTilingSystemBase(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
-        epsg=27704,
+        crs=27704,
     )
 
 
@@ -68,12 +68,12 @@ def e7eu_rpsb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
     return RegularProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
-        epsg=27704,
+        crs=27704,
     )
 
 
 def test_projsystembase():
-    e7eu = ProjSystemBase(epsg=27704)
+    e7eu = ProjSystemBase(crs=27704)
 
     lon, lat = 16.37, 48.19
     e7_coord = e7eu.lonlat_to_xy(lon, lat)
@@ -131,7 +131,7 @@ def test_reg_pgs_invalid(
         for grid in [e7eu_grid_t1, e7eu_grid_t3, e7eu_grid_invalid]
     }
     try:
-        _ = RegularProjTilingSystem(name="e7eu", tilings=grids, epsg=27704)
+        _ = RegularProjTilingSystem(name="e7eu", tilings=grids, crs=27704)
         raise AssertionError
     except ValueError:
         assert True
@@ -165,7 +165,7 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
         _ = RegularProjTilingSystem(
             name="e7eu",
             tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
-            epsg=27704,
+            crs=27704,
             congruent=True,
         )
         raise AssertionError
@@ -183,7 +183,7 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
     _ = RegularProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, new_grid]},
-        epsg=27704,
+        crs=27704,
         congruent=True,
     )
 
@@ -194,7 +194,7 @@ def test_allowed_samplings(e7eu_grid_t1: RegularTiling):
         _ = RegularProjTilingSystem(
             name="e7eu",
             tilings={e7eu_grid_t1.tiling_level: e7eu_grid_t1},
-            epsg=27704,
+            crs=27704,
             allowed_samplings={e7eu_grid_t1.tiling_level: allowed_samplings},
         )
         raise AssertionError
@@ -211,7 +211,7 @@ def test_allowed_samplings(e7eu_grid_t1: RegularTiling):
     _ = RegularProjTilingSystem(
         name="e7eu",
         tilings={new_grid.tiling_level: new_grid},
-        epsg=27704,
+        crs=27704,
         allowed_samplings={new_grid.tiling_level: allowed_samplings},
     )
 
@@ -222,14 +222,14 @@ def test_plot(e7eu_rpsb: RegularProjTilingSystem):
 
 
 def test_proj_zone_geog_io():
-    e7eu_ref = ProjSystemBase(epsg=27704)
+    e7eu_ref = ProjSystemBase(crs=27704)
     json_path = Path("test_proj_zone_geog.json")
     e7eu_ref.export_proj_zone_geog(json_path)
 
-    e7eu = ProjSystemBase(epsg=27704, proj_zone_geog=json_path)
+    e7eu = ProjSystemBase(crs=27704, proj_zone_geog=json_path)
     json_path.unlink()
 
-    assert e7eu._proj_zone_geog.ExportToWkt() == e7eu_ref._proj_zone_geog.ExportToWkt()  # noqa: SLF001
+    assert e7eu._proj_zone_geog.geom.wkt == e7eu_ref._proj_zone_geog.geom.wkt  # noqa: SLF001
 
 
 if __name__ == "__main__":

@@ -269,7 +269,7 @@ class RegularGrid(BaseModel, extra="allow"):
                 congruent = rpts.congruent
             rpts_defs[name] = RPTSDefinition(
                 name=name,
-                epsg=rpts.epsg,
+                crs=rpts.crs,
                 extent=rpts[ref_tiling_level].extent,
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
             ).model_dump()

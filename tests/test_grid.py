@@ -30,13 +30,13 @@ def rpts_defs():
     return {
         "e7eu": RPTSDefinition(
             name="e7eu",
-            epsg=27704,
+            crs=27704,
             extent=[0, 0, 8_660_000, 6_020_000],
             axis_orientation=("E", "S"),
         ),
         "e7af": RPTSDefinition(
             name="e7af",
-            epsg=27701,
+            crs=27701,
             extent=[0, 0, 12_000_000, 9_600_000],
             axis_orientation=("E", "S"),
         ),
@@ -72,12 +72,12 @@ def e7grid(e7eu_grid_t1: RegularTiling, e7af_grid_t1: RegularTiling):
     rpts_eu = RegularProjTilingSystem(
         name="e7eu",
         tilings={e7eu_grid_t1.tiling_level: e7eu_grid_t1},
-        epsg=27704,
+        crs=27704,
     )
     rpts_af = RegularProjTilingSystem(
         name="e7af",
         tilings={e7af_grid_t1.tiling_level: e7af_grid_t1},
-        epsg=27701,
+        crs=27701,
     )
 
     return RegularGrid(**{rpts_eu.name: rpts_eu, rpts_af.name: rpts_af})

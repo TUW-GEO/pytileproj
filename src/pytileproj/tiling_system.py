@@ -31,25 +31,26 @@
 import json
 from collections.abc import Generator
 from pathlib import Path
-from typing import Annotated, Any, Literal, NamedTuple, Union
+from typing import Annotated, Any, Literal, Union
 
 import numpy as np
 import pyproj
 import shapely.wkt
 from morecantile.models import Tile as RegularTile
 from morecantile.models import TileMatrixSet
-from osgeo import ogr, osr
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
 from pytileproj._const import JSON_INDENT, VIS_INSTALLED
-from pytileproj.geom import (
-    convert_any_to_geog_ogr_geom,
-    get_geog_sref,
+from pytileproj.projgeom import (
+    ProjCoord,
+    ProjGeom,
+    convert_any_to_geog_geom,
+    fetch_proj_zone,
+    pyproj_to_cartopy_crs,
     rasterise_polygon,
     transform_geom_to_geog,
     transform_geometry,
 )
-from pytileproj.proj import fetch_proj_zone, pyproj_to_cartopy_crs
 from pytileproj.tile import IrregularTile, RasterTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
 
@@ -78,46 +79,37 @@ __all__ = [
 ]
 
 
-class ProjCoord(NamedTuple):
-    """Define a coordinate in a certain projection."""
-
-    x: float
-    y: float
-    epsg: int
-
-
 class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
     """Base class defining a projection represented by an EPSG code and a zone."""
 
-    epsg: int
+    crs: Any
     proi_zone_geog: Annotated[
-        Path | shapely.Polygon | ogr.Geometry | None,
-        AfterValidator(convert_any_to_geog_ogr_geom),
+        Path | shapely.Geometry | ProjGeom | None,
+        AfterValidator(convert_any_to_geog_geom),
     ] = None
 
-    _proj_zone_geog: ogr.Geometry
-    _proj_zone: ogr.Geometry
+    _proj_zone_geog: ProjGeom
+    _proj_zone: ProjGeom
     _to_geog: pyproj.Transformer
     _from_geog: pyproj.Transformer
+    _crs: pyproj.CRS
 
     def __init__(self, **kwargs: dict[str, Any]) -> None:
         """Initialise projected system base object."""
         super().__init__(**kwargs)
-        this_crs = pyproj.CRS(self.epsg)
+        self._crs = pyproj.CRS.from_user_input(self.crs)
         geog_crs = pyproj.CRS(4326)
-        self._to_geog = pyproj.Transformer.from_crs(this_crs, geog_crs, always_xy=True)
+        self._to_geog = pyproj.Transformer.from_crs(self._crs, geog_crs, always_xy=True)
         self._from_geog = pyproj.Transformer.from_crs(
-            geog_crs, this_crs, always_xy=True
+            geog_crs, self._crs, always_xy=True
         )
-        self._proj_zone_geog = self.proi_zone_geog or fetch_proj_zone(self.epsg)
-        sref = osr.SpatialReference()
-        sref.ImportFromEPSG(self.epsg)
-        proj_zone_faulty = transform_geometry(self._proj_zone_geog, sref)
+        self._proj_zone_geog = self.proi_zone_geog or fetch_proj_zone(
+            self._crs.to_epsg()
+        )
+        proj_zone_faulty = transform_geometry(self._proj_zone_geog, self.crs)
         # buffer of 0 removes wrap-arounds along the anti-meridian
-        proj_zone = shapely.buffer(shapely.wkt.loads(proj_zone_faulty.ExportToWkt()), 0)
-        proj_zone = ogr.CreateGeometryFromWkt(proj_zone.wkt)
-        proj_zone.AssignSpatialReference(sref)
-        self._proj_zone = proj_zone
+        proj_zone = shapely.buffer(proj_zone_faulty.geom, 0)
+        self._proj_zone = ProjGeom(proj_zone, self._crs)
 
     def _lonlat_inside_proj(self, lon: float, lat: float) -> bool:
         """Check if a longitude and latitude coordinate is within the projection zone.
@@ -135,11 +127,14 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
             True if the given coordinate is within the projection zone, false if not.
 
         """
-        point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(lon, lat)
-        point.AssignSpatialReference(get_geog_sref())
+        proj_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
 
-        return point in self
+        return proj_coord in self
+
+    @property
+    def pyproj_crs(self) -> pyproj.CRS:
+        """Return PyProj representation of CRS."""
+        return self._crs
 
     def lonlat_to_xy(self, lon: float, lat: float) -> ProjCoord | None:
         """Convert geographic to a projected coordinates.
@@ -161,7 +156,7 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
         coord = None
         if self._lonlat_inside_proj(lon, lat):
             x, y = self._from_geog.transform(lon, lat)
-            coord = ProjCoord(x=x, y=y, epsg=self.epsg)
+            coord = ProjCoord(x, y, self._crs)
 
         return coord
 
@@ -183,7 +178,7 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
 
         """
         lon, lat = self._to_geog.transform(x, y)
-        coord = ProjCoord(x=lon, y=lat, epsg=4326)
+        coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
         if not self._lonlat_inside_proj(lon, lat):
             coord = None
 
@@ -198,16 +193,16 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
             Output path (.geojson)
 
         """
-        geojson = self._proj_zone_geog.ExportToJson()
+        geojson = self._proj_zone_geog.geom.wkt
         with path.open("w") as f:
             f.writelines(geojson)
 
-    def __contains__(self, geom: ogr.Geometry | ProjCoord) -> bool:
+    def __contains__(self, other: ProjGeom | ProjCoord) -> bool:
         """Evaluate if the given geometry is fully within the projection zone.
 
         Parameters
         ----------
-        geom : ogr.Geometry | ProjCoord
+        other : ProjGeom | ProjCoord
             Other geometry to evaluate a within operation with.
 
         Returns
@@ -216,29 +211,16 @@ class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
             True if the given geometry is within the projection zone, false if not.
 
         """
-        if isinstance(geom, ogr.Geometry):
-            other_sref = geom.GetSpatialReference()
-            if other_sref is None:
-                err_msg = "Spatial reference of the given geometry is not set."
-                raise AttributeError(err_msg)
-        elif isinstance(geom, ProjCoord):
-            point = shapely.Point((geom.x, geom.y))
-            other_sref = osr.SpatialReference()
-            other_sref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            other_sref.ImportFromEPSG(geom.epsg)
-            geom = ogr.CreateGeometryFromWkt(point.wkt)
-            geom.AssignSpatialReference(other_sref)
-        else:
-            err_msg = f"Geometry type {type(geom)} is not supported."
-            raise TypeError(err_msg)
+        if isinstance(other, ProjCoord):
+            other = ProjGeom(shapely.Point((other.x, other.y)), other.crs)
 
-        geog_sref = get_geog_sref()
-        if not geog_sref.IsSame(other_sref):
-            wrpd_geom = transform_geometry(geom, geog_sref)
+        geog_sref = pyproj.CRS.from_epsg(4326)
+        if not geog_sref.is_exact_same(other.crs):
+            wrpd_geom = transform_geometry(other, geog_sref)
         else:
-            wrpd_geom = geom
+            wrpd_geom = other
 
-        return wrpd_geom.Within(self._proj_zone_geog)
+        return shapely.within(wrpd_geom.geom, self._proj_zone_geog.geom)
 
 
 def validate_samplings(
@@ -562,11 +544,11 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         """
         tile_in_zone = True
         if self.tiles_in_zone_only:
-            tile_in_zone = tile.boundary_ogr.Intersect(self._proj_zone)
+            tile_in_zone = shapely.intersects(tile.boundary.geom, self._proj_zone.geom)
 
         return tile_in_zone
 
-    def get_tile_bbox_geog(self, tilename: str) -> ogr.Geometry:
+    def get_tile_bbox_geog(self, tilename: str) -> ProjGeom:
         """Return the boundary of the tile corresponding to the given tilename.
 
         Parameters
@@ -576,12 +558,12 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
         Returns
         -------
-        ogr.Geometry
+        ProjGeom
             Tile boundary.
 
         """
         raster_tile = self.create_tile(tilename)
-        return transform_geom_to_geog(raster_tile.boundary_ogr)
+        return transform_geom_to_geog(raster_tile.boundary)
 
     def _search_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
@@ -630,12 +612,14 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
             If the projection of the tiling system and the given raster tile differs.
 
         """
-        if raster_tile.epsg != self.epsg:
+        if not raster_tile.pyproj_crs.is_exact_same(self.pyproj_crs):
             err_msg = "Projection of tile and tiling system must match."
             raise ValueError(err_msg)
 
-        intrsct_geom = self._proj_zone.Intersection(raster_tile.boundary_ogr)
-        if intrsct_geom.Area() == 0.0:
+        intrsct_geom = shapely.intersection(
+            self._proj_zone.geom, raster_tile.boundary.geom
+        )
+        if intrsct_geom.is_empty:
             mask = np.zeros(raster_tile.shape, dtype=np.uint8)
         elif raster_tile in self:
             mask = np.ones(raster_tile.shape, dtype=np.uint8)
@@ -726,7 +710,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
             )
             raise ImportError(err_msg)
 
-        this_proj = pyproj_to_cartopy_crs(pyproj.CRS.from_epsg(self.epsg))
+        this_proj = pyproj_to_cartopy_crs(self._crs)
         other_proj = this_proj if proj is None else proj
 
         if ax is None:
@@ -770,10 +754,9 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
         if plot_zone:
             transform = this_proj._as_mpl_transform(ax)  # noqa: SLF001
-            zone_boundary = shapely.wkt.loads(self._proj_zone.ExportToWkt())
             x_coords_bound, y_coords_bound = [], []
-            if isinstance(zone_boundary, shapely.MultiPolygon):
-                for poly in zone_boundary.geoms:
+            if isinstance(self._proj_zone.geom, shapely.MultiPolygon):
+                for poly in self._proj_zone.geom.geoms:
                     x_coords_bound, y_coords_bound = list(
                         zip(*poly.exterior.coords, strict=False)
                     )
@@ -786,7 +769,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
                     )
             else:
                 x_coords_bound, y_coords_bound = list(
-                    zip(*zone_boundary.exterior.coords, strict=False)
+                    zip(*self._proj_zone.geom.exterior.coords, strict=False)
                 )
                 ax.plot(
                     x_coords_bound,
@@ -827,7 +810,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         """
         raise NotImplementedError
 
-    def __contains__(self, geom: RasterTile | ogr.Geometry) -> bool:
+    def __contains__(self, geom: RasterTile | ProjGeom) -> bool:
         """Contain wrapper.
 
         Evaluate if the given geometry or raster tile is fully within the
@@ -835,7 +818,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
 
         Parameters
         ----------
-        geom : ogr.Geometry | RasterTile
+        geom : ProjGeom | RasterTile
             Other geometry or raster tile to evaluate a within operation with.
 
         Returns
@@ -845,7 +828,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
             zone, false if not.
 
         """
-        arg = geom.boundary_ogr if isinstance(geom, RasterTile) else geom
+        arg = geom.boundary if isinstance(geom, RasterTile) else geom
 
         return super().__contains__(arg)
 
@@ -930,7 +913,7 @@ class RPTSDefinition(BaseModel):
     """Definition for a specific Regular Projected Tiling System."""
 
     name: str
-    epsg: int
+    crs: Any
     extent: tuple[float, float, float, float]
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
 
@@ -952,7 +935,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
     def __init__(self, **kwargs: dict[str, Any]) -> None:
         """Initialise regular projected tiling system."""
         super().__init__(**kwargs)
-        wkt = pyproj.CRS(self.epsg).to_json_dict()
+        wkt = self._crs.to_json_dict()
         self._tms = TileMatrixSet(
             crs={"wkt": wkt},
             tileMatrices=[
@@ -1027,7 +1010,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
 
         return cls(
             name=rpts_def.name,
-            epsg=rpts_def.epsg,
+            crs=rpts_def.crs,
             tilings=tilings,
             congruent=congruent,
             allowed_samplings=allowed_samplings,
@@ -1242,7 +1225,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             coord.x,
             coord.y,
             tiling_level,
-            geographic_crs=pyproj.CRS.from_epsg(coord.epsg),
+            geographic_crs=coord.crs,
         )
         tilename = self._create_tilename(tile)
         return self._to_raster_tile(tile, name=tilename)
@@ -1265,7 +1248,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         """
         extent = self._tms.xy_bounds(tile)
         sampling = self[tile.z].sampling
-        return RasterTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
+        return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
     def _search_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
@@ -1370,8 +1353,8 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         """
         tile = self._create_tile(tilename)
         raster_tile = self._to_raster_tile(tile, name=tilename)
-        if self.tiles_in_zone_only and not raster_tile.boundary_ogr.Intersect(
-            self._proj_zone
+        if self.tiles_in_zone_only and not shapely.intersects(
+            raster_tile.boundary.geom, self._proj_zone.geom
         ):
             raster_tile = None
 
@@ -1397,7 +1380,7 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         """
         extent = tile.boundary.bounds
         sampling = self[tile.z].sampling
-        return RasterTile.from_extent(extent, self.epsg, sampling, sampling, name=name)
+        return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
     def search_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
@@ -1420,8 +1403,8 @@ class IrregularProjTilingSystem(ProjTilingSystemBase):
         for tile in self[tiling_level].tiles_in_bbox(bbox):
             tilename = self._create_tilename(tile)
             raster_tile = self._to_raster_tile(tile, name=tilename)
-            if self.tiles_in_zone_only and not raster_tile.boundary_ogr.Intersect(
-                self._proj_zone
+            if self.tiles_in_zone_only and not shapely.intersects(
+                raster_tile.boundary.geom, self._proj_zone.geom
             ):
                 continue
 

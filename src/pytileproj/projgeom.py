@@ -26,35 +26,243 @@
 # those of the authors and should not be interpreted as representing official
 # policies, either expressed or implied, of the FreeBSD Project.
 
-"""Utilities for handling OGR and shapely geometries."""
+"""Utility module for projected geometries."""
 
 import json
 import warnings
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import numpy as np
+import pyproj
+import requests
 import shapely
-import shapely.wkt as swkt
 from antimeridian import fix_multi_polygon, fix_polygon
-from osgeo import ogr, osr
 from PIL import Image, ImageDraw
+from shapely.geometry import MultiPolygon, Polygon
 
-from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM
-from pytileproj.proj import get_geog_sref
+from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM, TIMEOUT, VIS_INSTALLED
+
+if VIS_INSTALLED:
+    import cartopy.crs as ccrs
 
 __all__ = [
-    "convert_any_to_geog_ogr_geom",
-    "get_geog_intersection",
+    "ProjCoord",
+    "ProjGeom",
     "ij2xy",
+    "pyproj_to_cartopy_crs",
     "rasterise_polygon",
     "round_polygon_vertices",
-    "segmentize_geometry",
-    "shapely_to_ogr_polygon",
     "split_polygon_by_antimeridian",
+    "transform_coords",
     "transform_geom_to_geog",
     "transform_geometry",
     "xy2ij",
 ]
+
+
+class ProjCoord(NamedTuple):
+    """Define a coordinate in a certain projection."""
+
+    x: float
+    y: float
+    crs: pyproj.CRS
+
+
+class ProjGeom(NamedTuple):
+    """Define a geometry in a certain projection."""
+
+    geom: shapely.Geometry
+    crs: pyproj.CRS
+
+
+def fetch_proj_zone(epsg: int) -> ProjGeom | None:
+    """Fetch the zone polygon of the given projection from the EPSG database.
+
+    Parameters
+    ----------
+    epsg: int
+        EPSG code representing the projection.
+
+    Returns
+    -------
+    ProjGeom | None
+        Projected polygon or multi-polygon object representing the projection zone.
+
+    Notes
+    -----
+    This function requires a internet connection.
+
+    """
+    epsg_code_url = "https://apps.epsg.org/api/v1/ProjectedCoordRefSystem/"
+    epsg_extent_url = "https://apps.epsg.org/api/v1/Extent/"
+
+    zone_geom = None
+    code_resp = requests.get(f"{epsg_code_url}/{epsg}/", timeout=TIMEOUT)
+    if code_resp.ok:
+        code_data = json.loads(code_resp.content)
+        code_usages = code_data["Usage"]
+        if len(code_usages):
+            if len(code_usages) != 1:
+                warnings.warn("Multiple EPSG code usages found!", stacklevel=1)
+            code_usage = code_usages[-1]
+            extent_resp = requests.get(
+                f"{epsg_extent_url}/{code_usage['Extent']['Code']}/polygon",
+                timeout=TIMEOUT,
+            )
+            if extent_resp.ok:
+                extent_data = json.loads(extent_resp.content)
+                geom_type = extent_data["type"]
+                coords = extent_data["coordinates"]
+                if geom_type == "Polygon":
+                    zone_geom = Polygon(coords[0])
+                elif geom_type == "MultiPolygon":
+                    zone_geom = MultiPolygon(coords)
+                else:
+                    err_msg = f"Geometry type '{geom_type}' not supported."
+                    raise ValueError(err_msg)
+                zone_geom = ProjGeom(zone_geom, pyproj.CRS.from_epsg(4326))
+
+    return zone_geom
+
+
+def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
+    """Convert a pyproj to a cartopy CRS object.
+
+    Parameters
+    ----------
+    crs: pyproj.CRS
+        Pyproj CRS object.
+
+    Returns
+    -------
+    ccrs.CRS
+        Cartopy CRS object.
+
+    """
+    proj4_params = crs.to_dict()
+    proj4_name = proj4_params.get("proj")
+    central_longitude = proj4_params.get("lon_0", 0.0)
+    central_latitude = proj4_params.get("lat_0", 0.0)
+    false_easting = proj4_params.get("x_0", 0.0)
+    false_northing = proj4_params.get("y_0", 0.0)
+    scale_factor = proj4_params.get("k", 1.0)
+    standard_parallels = (
+        proj4_params.get("lat_1", 20.0),
+        proj4_params.get("lat_2", 50.0),
+    )
+
+    ccrs_lut = {
+        "longlat": ccrs.PlateCarree(central_longitude),
+        "aeqd": ccrs.AzimuthalEquidistant(
+            central_longitude, central_latitude, false_easting, false_northing
+        ),
+        "merc": ccrs.Mercator(
+            central_longitude,
+            false_easting=false_easting,
+            false_northing=false_northing,
+            scale_factor=scale_factor,
+        ),
+        "eck1": ccrs.EckertI(central_longitude, false_easting, false_northing),
+        "eck2": ccrs.EckertII(central_longitude, false_easting, false_northing),
+        "eck3": ccrs.EckertIII(central_longitude, false_easting, false_northing),
+        "eck4": ccrs.EckertIV(central_longitude, false_easting, false_northing),
+        "eck5": ccrs.EckertV(central_longitude, false_easting, false_northing),
+        "eck6": ccrs.EckertVI(central_longitude, false_easting, false_northing),
+        "aea": ccrs.AlbersEqualArea(
+            central_longitude,
+            central_latitude,
+            false_easting,
+            false_northing,
+            standard_parallels,
+        ),
+        "eqdc": ccrs.EquidistantConic(
+            central_longitude,
+            central_latitude,
+            false_easting,
+            false_northing,
+            standard_parallels,
+        ),
+        "gnom": ccrs.Gnomonic(central_longitude, central_latitude),
+        "laea": ccrs.LambertAzimuthalEqualArea(
+            central_longitude, central_latitude, false_easting, false_northing
+        ),
+        "lcc": ccrs.LambertConformal(
+            central_longitude,
+            central_latitude,
+            false_easting,
+            false_northing,
+            standard_parallels=standard_parallels,
+        ),
+        "mill": ccrs.Miller(central_longitude),
+        "moll": ccrs.Mollweide(
+            central_longitude,
+            false_easting=false_easting,
+            false_northing=false_northing,
+        ),
+        "stere": ccrs.Stereographic(
+            central_latitude,
+            central_longitude,
+            false_easting,
+            false_northing,
+            scale_factor=scale_factor,
+        ),
+        "ortho": ccrs.Orthographic(central_longitude, central_latitude),
+        "robin": ccrs.Robinson(
+            central_longitude,
+            false_easting=false_easting,
+            false_northing=false_northing,
+        ),
+        "sinus": ccrs.Sinusoidal(central_longitude, false_easting, false_northing),
+        "tmerc": ccrs.TransverseMercator(
+            central_longitude,
+            central_latitude,
+            false_easting,
+            false_northing,
+            scale_factor,
+        ),
+    }
+
+    ccrs_proj = ccrs_lut.get(proj4_name)
+
+    if ccrs_proj is None:
+        err_msg = f"Projection '{proj4_name}' is not supported."
+        raise ValueError(err_msg)
+
+    return ccrs_proj
+
+
+def transform_coords(
+    x: float,
+    y: float,
+    this_crs: Any,  # noqa: ANN401
+    other_crs: Any,  # noqa: ANN401
+) -> tuple[float, float]:
+    """Transform coordinate tuple from a given to another projection.
+
+    Parameters
+    ----------
+    x: float
+        X coordinate.
+    y: float
+        Y coordinate.
+    this_crs: Any
+        CRS of the input coordinates. A projection definition
+        pyproj.CRS can handle.
+    other_crs: Any
+        CRS of the target projection. A projection definition
+        pyproj.CRS can handle.
+
+    Returns
+    -------
+    float
+        X coordinate in the target projection.
+    float
+        Y coordinate in the target projection.
+
+    """
+    traffo = pyproj.Transformer.from_crs(this_crs, other_crs, always_xy=True)
+    return traffo.transform(x, y)
 
 
 def xy2ij(
@@ -195,69 +403,25 @@ def ij2xy(
     return x, y
 
 
-def round_polygon_vertices(poly: ogr.Geometry, decimals: int) -> ogr.Geometry:
-    """Clean coordinates of an OGR polygon, so that it has rounded coordinates.
+def round_polygon_vertices(poly: shapely.Polygon, decimals: int) -> shapely.Polygon:
+    """Clean coordinates of a polygon, so that it has rounded coordinates.
 
     Parameters
     ----------
-    poly : ogr.Geometry
-        An OGR polygon object.
+    poly : shapely.Polygon
+        A shapely polygon object.
     decimals : int
         Number of significant digits to round to.
 
     Returns
     -------
-    ogr.Geometry
-        An OGR polygon with rounded coordinates.
+    shapely.Polygon
+        A polygon with rounded coordinates.
 
     """
-    ring = poly.GetGeometryRef(0)
-
-    rounded_ring = ogr.Geometry(ogr.wkbLinearRing)
-
-    n_points = ring.GetPointCount()
-
-    for p in range(n_points):
-        x, y, z = ring.GetPoint(p)
-        rx, ry, rz = [
-            np.round(x, decimals=decimals),
-            np.round(y, decimals=decimals),
-            np.round(z, decimals=decimals),
-        ]
-        rounded_ring.AddPoint(rx, ry, rz)
-
-    poly_out = ogr.Geometry(ogr.wkbPolygon)
-    poly_out.AddGeometry(rounded_ring)
-
-    return poly_out
-
-
-def shapely_to_ogr_polygon(poly: shapely.Polygon, epsg: int) -> ogr.Geometry:
-    """Convert a shapely to an OGR polygon and assigns the given projection.
-
-    Parameters
-    ----------
-    poly: shapely.Polygon
-        Shapely polygon object.
-    epsg: int
-        EPSG code for the polygon.
-
-    Returns
-    -------
-    ogr.Geometry
-        OGR polygon object.
-
-    """
-    # doing a double WKT conversion to prevent precision
-    # issues nearby machine epsilon
-    poly_ogr = ogr.CreateGeometryFromWkt(
-        ogr.CreateGeometryFromWkt(poly.wkt).ExportToWkt()
-    )
-    sref = osr.SpatialReference()
-    sref.ImportFromEPSG(epsg)
-    poly_ogr.AssignSpatialReference(sref)
-
-    return poly_ogr
+    xs, ys = zip(*poly.exterior.coords, strict=True)
+    xs, ys = np.round(xs, decimals=decimals), np.round(ys, decimals=decimals)
+    return shapely.Polygon(list(zip(xs, ys, strict=True)))
 
 
 def rasterise_polygon(
@@ -338,66 +502,15 @@ def rasterise_polygon(
     return np.array(mask_img).astype(np.uint8)
 
 
-def segmentize_geometry(geom: ogr.Geometry, segment: float = 0.5) -> ogr.Geometry:
-    """Segmentizes the lines of a geometry.
-
-    Parameters
-    ----------
-    geom : ogr.Geometry
-        OGR geometry object.
-    segment : float, optional
-        For precision: distance in units of the geometry projection
-        defining longest segment of the geometry.
-
-    Returns
-    -------
-    ogr.Geometry
-        A congruent geometry realised by more vertices along its shape.
-
-    """
-    geom_seg = geom.Clone()
-    geom_seg.Segmentize(segment)
-
-    return geom_seg
-
-
-def get_geog_intersection(poly_1: ogr.Geometry, poly_2: ogr.Geometry) -> bool:
-    """Intersect in the LonLat space.
-
-    'poly_1' is split at the antimeridian (i.e. the 180 degree dateline).
-
-    Parameters
-    ----------
-    poly_1 : ogr.Geometry
-        OGR polygon object in LonLat space. It is split by the antimeridian.
-    poly_2 : ogr.Geometry
-        Other OGR polygon object to intersect with.
-
-    Returns
-    -------
-    boolean
-        True if both polygons intersect, false otherwise.
-
-    """
-    poly_1c = poly_1.Clone()
-    if poly_1.GetGeometryName() == "MULTIPOLYGON":
-        poly_1c = ogr.ForceToPolygon(poly_1c)
-        warnings.warn("Take care: multi-polygon is forced to a polygon!", stacklevel=1)
-
-    polygons = split_polygon_by_antimeridian(poly_1c)
-
-    return polygons.Intersection(poly_2.Clone())
-
-
 def split_polygon_by_antimeridian(
-    geog_poly: ogr.Geometry, *, great_circle: bool = False
-) -> ogr.Geometry:
+    geog_geom: ProjGeom, *, great_circle: bool = False
+) -> ProjGeom:
     """Split a polygon or multi-polygon at the antimeridian.
 
     Parameters
     ----------
-    geog_poly : ogr.Geometry
-        OGR polygon or multi-polygon object in LonLat space to be
+    geog_geom : ProjGeom
+        Projected polygon or multi-polygon object in LonLat space to be
         split by the antimeridian.
     great_circle: bool, optional
         True, if a great circle on the sphere should be used to split
@@ -405,116 +518,122 @@ def split_polygon_by_antimeridian(
 
     Returns
     -------
-    ogr.Geometry
+    ProjGeom
         Multi-polygon comprising east and west parts of `geog_poly`.
         It contains only one polygon if no intersect with the antimeridian is given.
 
     """
-    geom_type = geog_poly.GetGeometryName()
-    if geom_type == "MULTIPOLYGON":
-        geog_poly_am = fix_multi_polygon(
-            swkt.loads(geog_poly.ExportToWkt()), great_circle=great_circle
-        )
-    elif geom_type == "POLYGON":
-        geog_poly_am = fix_polygon(
-            swkt.loads(geog_poly.ExportToWkt()), great_circle=great_circle
-        )
+    geog_epsg = 4326
+    if geog_geom.crs.to_epsg() != geog_epsg:
+        err_msg = "Geometry is not in the LonLat projection."
+        raise ValueError(err_msg)
+
+    geom_type = geog_geom.geom.geom_type
+    if geom_type == "MultiPolygon":
+        geog_poly_am = fix_multi_polygon(geog_geom.geom, great_circle=great_circle)
+    elif geom_type == "Polygon":
+        geog_poly_am = fix_polygon(geog_geom.geom, great_circle=great_circle)
     else:
         err_msg = f"Geometry type {geom_type} not supported."
         raise ValueError(err_msg)
 
-    geog_poly_am = ogr.CreateGeometryFromWkt(geog_poly_am.wkt)
-    geog_poly_am.AssignSpatialReference(geog_poly.GetSpatialReference())
-
-    return geog_poly_am
+    return ProjGeom(geom=geog_poly_am, crs=pyproj.CRS.from_epsg(geog_epsg))
 
 
 def transform_geometry(
-    geom: ogr.Geometry, sref: osr.SpatialReference, segment: float | None = None
-) -> ogr.Geometry:
-    """Transform an OGR geometry to the given target spatial reference system.
+    proj_geom: ProjGeom,
+    crs: Any,  # noqa: ANN401
+    segment: float | None = None,
+) -> ProjGeom:
+    """Transform a geometry to the given target spatial reference system.
 
     Parameters
     ----------
-    geom : ogr.Geometry
-        OGR geometry object to transform.
-    sref : osr.SpatialReference
-        OSR spatial reference to what the geometry should be transformed to.
+    proj_geom : ProjGeom
+        Projected geometry object to transform.
+    crs : Any
+        Target CRS of the geometry. A projection definition
+        pyproj.CRS can handle.
     segment : float, optional
         For precision: distance in units of the geometry projection
         defining longest segment of the geometry.
 
     Returns
     -------
-    ogr.Geometry
-        An OGR geometry represented in the target spatial reference.
+    ProjGeom
+        Geometry represented in the target spatial reference.
+
+    Notes
+    -----
+    When working with geographic projections, this function also
+    takes the antimeridian into account.
 
     """
-    trans_geom = geom.Clone()
-
     # modify the geometry such it has no segment longer then the given distance
     if segment is not None:
-        trans_geom = segmentize_geometry(trans_geom, segment=segment)
+        src_geom = shapely.segmentize(proj_geom.geom, max_segment_length=segment)
+    else:
+        src_geom = proj_geom.geom
 
-    trans_geom.TransformTo(sref)
+    transformer = pyproj.Transformer.from_crs(proj_geom.crs, crs, always_xy=True)
+    dst_geom = shapely.transform(src_geom, transformer.transform, interleaved=False)
+    dst_crs = pyproj.CRS.from_user_input(crs)
 
-    if sref.ExportToProj4().startswith(
-        "+proj=longlat"
-    ) and trans_geom.GetGeometryName() in ["POLYGON", "MULTIPOLYGON"]:
-        trans_geom = split_polygon_by_antimeridian(trans_geom)
+    geog_epsg = 4236
+    if dst_crs.to_epsg() == geog_epsg:
+        dst_geom = split_polygon_by_antimeridian(dst_geom)
 
-    return trans_geom
+    return ProjGeom(geom=dst_geom, crs=dst_crs)
 
 
-def transform_geom_to_geog(geom: ogr.Geometry) -> ogr.Geometry:
+def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
     """Transform geometry to the LonLat system.
 
     Parameters
     ----------
-    geom: ogr.Geometry
-        OGR geometry object to transform.
+    proj_geom: ProjGeom
+        Projected geometry object to transform.
 
     Returns
     -------
-    ogr.Geometry
-        OGR geometry object in the LonLat system.
+    ProjGeom
+        Geometry object in the LonLat system.
 
     """
-    return transform_geometry(geom, get_geog_sref(), segment=DEFAULT_SEG_NUM)
+    return transform_geometry(proj_geom, 4326, segment=DEFAULT_SEG_NUM)
 
 
-def convert_any_to_geog_ogr_geom(
-    arg: Path | shapely.Geometry | ogr.Geometry | None,
-) -> ogr.Geometry | None:
-    """Convert an arbitrary input to an OGR geometry in the LonLat system.
+def convert_any_to_geog_geom(
+    arg: Path | shapely.Geometry | ProjGeom | None,
+) -> ProjGeom | None:
+    """Convert an arbitrary input to a projected geometry in the LonLat system.
 
     Parameters
     ----------
-    arg: Path | shapely.Polygon | ogr.Geometry | None
+    arg: Path | shapely.Polygon | ProjGeom | None
         Input representing a geometry object. It can be one of:
             - a path to a GeoJSON file
             - a shapely.Geometry
-            - an ogr.Geometry
+            - a ProjGeom
             - None
 
     Returns
     -------
-    ogr.Geometry | None
-        Input converted to an OGR polygon or multi-polygon.
+    ProjGeom | None
+        Input converted to an projected polygon or multi-polygon.
         If the input is None, then None will be returned.
 
     """
     if isinstance(arg, Path):
         with arg.open() as f:
             geojson = json.load(f)
-        proj_zone_geog = ogr.CreateGeometryFromJson(geojson)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(arg, shapely.Polygon):
-        proj_zone_geog = ogr.CreateGeometryFromWkt(arg.wkt)
-        proj_zone_geog.AssignSpatialReference(get_geog_sref())
-    elif isinstance(arg, ogr.Geometry):
-        proj_zone_geog = arg
+        geom = shapely.from_geojson(geojson)
+        proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
+    elif isinstance(arg, shapely.Geometry):
+        proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))
+    elif isinstance(arg, ProjGeom):
+        proj_geom = arg
     else:
-        proj_zone_geog = None
+        proj_geom = None
 
-    return proj_zone_geog
+    return proj_geom

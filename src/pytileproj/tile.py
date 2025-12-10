@@ -36,19 +36,19 @@ import numpy as np
 import pyproj
 import shapely
 import shapely.wkt
-from osgeo import ogr, osr
 from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
 
 from pytileproj._const import DECIMALS, JSON_INDENT, VIS_INSTALLED
-from pytileproj.geom import (
+from pytileproj.projgeom import (
+    ProjGeom,
     ij2xy,
+    pyproj_to_cartopy_crs,
     round_polygon_vertices,
-    shapely_to_ogr_polygon,
+    transform_coords,
     transform_geometry,
     xy2ij,
 )
-from pytileproj.proj import pyproj_to_cartopy_crs, transform_coords
 
 if VIS_INSTALLED:
     import cartopy
@@ -95,7 +95,7 @@ def _align_geom():  # noqa: ANN202
     """Align external geometries.
 
     A decorator which checks if a spatial reference is available for an
-    `OGR.geometry` object and optionally reprojects the given geometry to the
+    ProjGeom object and optionally reprojects the given geometry to the
     spatial reference of the projected tile.
 
     Returns
@@ -105,7 +105,7 @@ def _align_geom():  # noqa: ANN202
 
     Notes
     -----
-    The OGR geometry is assumed to be given in first place.
+    The projected geometry is assumed to be given in first place.
 
     """
 
@@ -126,27 +126,20 @@ def _align_geom():  # noqa: ANN202
 
         def wrapper(  # noqa: ANN202
             self: "RasterTile",
-            geom: ogr.Geometry,
+            arg: Union[ProjGeom, "RasterTile"],
             *args: Sequence[Any],
             **kwargs: dict[str, Any],
         ):
-            geom = geom.boundary_ogr if isinstance(geom, RasterTile) else geom
-            other_sref = geom.GetSpatialReference()
-            if other_sref is None:
-                err_msg = "Spatial reference of the given geometry is not set."
-                raise AttributeError(err_msg)
+            proj_geom = arg.boundary if isinstance(arg, RasterTile) else arg
 
             # warp the geometry to the spatial reference of the tile
             # if they are not the same
-            if hasattr(self, "epsg"):
-                this_sref = osr.SpatialReference()
-                this_sref.ImportFromEPSG(self.epsg)
-                if not this_sref.IsSame(other_sref):
-                    wrpd_geom = transform_geometry(geom, this_sref)
-                else:
-                    wrpd_geom = geom
+            this_crs = self.pyproj_crs
+            other_crs = proj_geom.crs
+            if not this_crs.is_exact_same(other_crs):
+                wrpd_geom = transform_geometry(proj_geom, this_crs)
             else:
-                wrpd_geom = geom
+                wrpd_geom = proj_geom
 
             return f(self, wrpd_geom, *args, **kwargs)
 
@@ -158,7 +151,7 @@ def _align_geom():  # noqa: ANN202
 class RasterTile(BaseModel):
     """Defines a raster tile geometry located in a certain projection."""
 
-    epsg: NonNegativeInt
+    crs: Any
     n_rows: NonNegativeInt
     n_cols: NonNegativeInt
     geotrans: tuple[float, float, float, float, float, float] | None = (
@@ -172,20 +165,20 @@ class RasterTile(BaseModel):
     px_origin: str | None = "ul"
     name: str | None = None
 
-    _boundary: ogr.Geometry
+    _boundary: ProjGeom
     _crs: pyproj.CRS
 
     def __init__(self, **kwargs: dict[str, Any]) -> None:
         """Initialise raster tile object."""
         super().__init__(**kwargs)
-        self._crs = pyproj.CRS.from_epsg(self.epsg)
-        self._boundary = self.__ogr_boundary()
+        self._crs = pyproj.CRS.from_user_input(self.crs)
+        self._boundary = self.__proj_geom_boundary()
 
     @classmethod
     def from_extent(  # noqa: D417
         cls,
         extent: tuple[float, float, float, float],
-        epsg: int,
+        crs: Any,  # noqa: ANN401
         x_pixel_size: int,
         y_pixel_size: int,
         **kwargs: dict[str, Any],
@@ -196,8 +189,8 @@ class RasterTile(BaseModel):
         ----------
         extent: tuple[float, float, float, float]
             Tile extent (x_min, y_min, x_max, y_max).
-        epsg: int
-            EPSG code of the projection.
+        crs: Any
+            A projection definition pyproj.CRS can handle.
         x_pixel_size: int
             Pixel size in units of the projection in X.
         y_pixel_size: int
@@ -216,13 +209,12 @@ class RasterTile(BaseModel):
         ul_x, ul_y = ll_x, ll_y + n_rows * y_pixel_size
         geotrans = (ul_x, x_pixel_size, 0, ul_y, 0, -y_pixel_size)
 
-        return cls(n_rows=n_rows, n_cols=n_cols, epsg=epsg, geotrans=geotrans, **kwargs)
+        return cls(n_rows=n_rows, n_cols=n_cols, crs=crs, geotrans=geotrans, **kwargs)
 
     @classmethod
-    @_align_geom()
     def from_geometry(  # noqa: D417
         cls,
-        geom: ogr.Geometry,
+        proj_geom: ProjGeom,
         x_pixel_size: float,
         y_pixel_size: float,
         **kwargs: dict[str, Any],
@@ -234,8 +226,9 @@ class RasterTile(BaseModel):
 
         Parameters
         ----------
-        geom : ogr.Geometry
-            Geometry object from which the raster tile object should be created.
+        proj_geom : ProjGeom
+            Projected geometry object from which the raster tile object
+            should be created.
         x_pixel_size : float
             Pixel size in units of the projection in X.
         y_pixel_size : float
@@ -252,12 +245,10 @@ class RasterTile(BaseModel):
         (pixel) origin.
 
         """
-        epsg = pyproj.CRS(geom.GetSpatialReference().ExportToWkt()).to_epsg()
-
-        geom_ch = geom.ConvexHull()
-        geom_sh = shapely.wkt.loads(geom_ch.ExportToWkt())
-        bbox = geom_sh.bounds
-        return cls.from_extent(bbox, epsg, x_pixel_size, y_pixel_size, **kwargs)
+        geom_ch = shapely.convex_hull(proj_geom.geom)
+        return cls.from_extent(
+            geom_ch.bounds, proj_geom.crs, x_pixel_size, y_pixel_size, **kwargs
+        )
 
     @classmethod
     def from_json(cls, json_str: str) -> "RasterTile":
@@ -279,6 +270,11 @@ class RasterTile(BaseModel):
     def to_json(self) -> str:
         """Create JSON class representation."""
         return self.model_dump_json(indent=JSON_INDENT)
+
+    @property
+    def pyproj_crs(self) -> pyproj.CRS:
+        """Return PyProj representation of CRS."""
+        return self._crs
 
     @property
     def ori(self) -> float:
@@ -445,7 +441,8 @@ class RasterTile(BaseModel):
     @property
     def centre(self) -> tuple[float, float]:
         """Centre defined by the mass centre of the vertices."""
-        return shapely.wkt.loads(self._boundary.Centroid().ExportToWkt()).coords[0]
+        cenroid = shapely.centroid(self._boundary.geom)
+        return cenroid.x, cenroid.y
 
     @property
     def outer_boundary_corners(
@@ -526,27 +523,27 @@ class RasterTile(BaseModel):
         return x_coords, y_coords
 
     @property
-    def boundary_ogr(self) -> ogr.Geometry:
-        """Return OGR geometry representation of the boundary of the raster tile."""
+    def boundary(self) -> ProjGeom:
+        """Return a projected geometry representation of the raster tile."""
         return self._boundary
 
     @property
     def boundary_wkt(self) -> str:
         """Return Well Known Text (WKT) of the boundary of the raster tile."""
-        return self._boundary.ExportToWkt()
+        return self._boundary.geom.wkt
 
     @property
     def boundary_shapely(self) -> shapely.geometry.Polygon:
         """Boundary of the raster tile represented as a Shapely polygon."""
-        return shapely.wkt.loads(self._boundary.ExportToWkt())
+        return self._boundary.geom
 
     @_align_geom()
-    def intersects(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
+    def intersects(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
         """Evaluate if the raster tile instance and another geometry intersect.
 
         Parameters
         ----------
-        other : ogr.Geometry | RasterTile
+        other : ProjGeom | RasterTile
             Other geometry to evaluate an intersection with.
 
         Returns
@@ -555,15 +552,15 @@ class RasterTile(BaseModel):
             True if both geometries intersect, false if not.
 
         """
-        return self._boundary.Intersects(other)
+        return shapely.intersects(self._boundary.geom, other.geom)
 
     @_align_geom()
-    def touches(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
+    def touches(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
         """Evaluate if the raster tile instance and another geometry touch each other.
 
         Parameters
         ----------
-        other : ogr.Geometry | RasterTile
+        other : ProjGeom | RasterTile
             Other geometry to evaluate a touch operation with.
 
         Returns
@@ -572,17 +569,18 @@ class RasterTile(BaseModel):
             True if both geometries touch each other, false if not.
 
         """
-        return round_polygon_vertices(self._boundary, DECIMALS).Touches(
-            round_polygon_vertices(other, DECIMALS)
+        return shapely.touches(
+            round_polygon_vertices(self._boundary.geom, DECIMALS),
+            round_polygon_vertices(other.geom, DECIMALS),
         )
 
     @_align_geom()
-    def within(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
+    def within(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
         """Evaluate if the raster tile is fully within another geometry.
 
         Parameters
         ----------
-        other : ogr.Geometry | RasterTile
+        other : ProjGeom | RasterTile
             Other geometry to evaluate a within operation with.
 
         Returns
@@ -591,15 +589,15 @@ class RasterTile(BaseModel):
             True if the raster tile is within the given geometry, false if not.
 
         """
-        return self._boundary.Within(other)
+        return shapely.within(self._boundary.geom, other.geom)
 
     @_align_geom()
-    def overlaps(self, other: Union[ogr.Geometry, "RasterTile"]) -> bool:
+    def overlaps(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
         """Evaluate if a geometry overlaps with the raster tile.
 
         Parameters
         ----------
-        other : ogr.Geometry | RasterTile
+        other : ProjGeom | RasterTile
             Other geometry to evaluate an overlaps operation with.
 
         Returns
@@ -608,10 +606,14 @@ class RasterTile(BaseModel):
             True if the given geometry overlaps the raster tile, false if not.
 
         """
-        return self._boundary.Overlaps(other)
+        return shapely.overlaps(self._boundary.geom, other.geom)
 
     def xy2rc(
-        self, x: float, y: float, epsg: int | None = None, px_origin: str | None = None
+        self,
+        x: float,
+        y: float,
+        crs: Any = None,  # noqa: ANN401
+        px_origin: str | None = None,
     ) -> tuple[int, int]:
         """Convert world system to pixels coordinates.
 
@@ -623,8 +625,8 @@ class RasterTile(BaseModel):
             World system coordinate in X direction.
         y : float
             World system coordinate in Y direction.
-        epsg: int
-            EPSG code defining the projection of `x` and `y`.
+        crs: Any
+            CRS of `x` and `y`. A projection definition pyproj.CRS can handle.
         px_origin : str, optional
             Defines the world system origin of the pixel. It can be:
             - upper left ("ul")
@@ -646,9 +648,8 @@ class RasterTile(BaseModel):
         Rounds to the closest, lower integer.
 
         """
-        if epsg is not None:
-            sref = pyproj.CRS.from_epsg(epsg)
-            x, y = transform_coords(x, y, sref, self._crs)
+        if crs is not None:
+            x, y = transform_coords(x, y, crs, self.crs)
         px_origin = self.px_origin if px_origin is None else px_origin
         c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
         return r, c
@@ -695,12 +696,12 @@ class RasterTile(BaseModel):
         edgecolor: str = "black",
         edgewidth: float = 1,
         alpha: float = 1.0,
-        proj: pyproj.CRS | None = None,
+        proj: Any = None,  # noqa: ANN401
         show: bool = False,
         label_tile: bool = False,
         add_country_borders: bool = True,
         extent: tuple | None = None,
-        extent_proj: pyproj.CRS | None = None,
+        extent_proj: Any = None,  # noqa: ANN401
     ) -> "mplax.Axes":
         """Plot the boundary of the raster tile on a map.
 
@@ -720,8 +721,8 @@ class RasterTile(BaseModel):
             Width the of edge line (defaults to 1).
         alpha : float, optional
             Opacity (default is 1.).
-        proj : pyproj.CRS, optional
-            Pyproj projection instance defining the projection of the axes.
+        proj : pyproj.CRS | None
+            CRS defining the projection of the axes and pyproj.CRS can handle.
             Defaults to None, which means the projection of the spatial
             reference system of the raster tile is taken.
         show : bool, optional
@@ -735,9 +736,10 @@ class RasterTile(BaseModel):
         extent : tuple or list, optional
             Coordinate/map extent of the plot, given as [min_x, min_y, max_x, max_y]
             (default is None, meaning global extent).
-        extent_proj : pyproj.CRS | None
-            Projection of the given extent. If it is None, then it is assumed that
-            'extent' is referring to the native projection of the raster tile.
+        extent_proj : pyproj.CRS | Any
+            CRS of the given extent. A projection definition pyproj.CRS can handle.
+            If it is None, then it is assumed that 'extent' is referring to the
+            native projection of the raster tile.
 
         Returns
         -------
@@ -753,8 +755,12 @@ class RasterTile(BaseModel):
             )
             raise ImportError(err_msg)
 
-        this_proj = pyproj_to_cartopy_crs(self._crs)
-        other_proj = this_proj if proj is None else pyproj_to_cartopy_crs(proj)
+        this_proj = pyproj_to_cartopy_crs(self.pyproj_crs)
+        other_proj = (
+            this_proj
+            if proj is None
+            else pyproj_to_cartopy_crs(pyproj.CRS.from_user_input(proj))
+        )
 
         if ax is None:
             ax = plt.axes(projection=other_proj)
@@ -777,8 +783,16 @@ class RasterTile(BaseModel):
         ax.add_patch(patch)
 
         if extent is not None:
-            dst_crs = proj or self._crs
-            src_crs = extent_proj or self._crs
+            dst_crs = (
+                pyproj.CRS.from_user_input(proj)
+                if proj is not None
+                else self.pyproj_crs
+            )
+            src_crs = (
+                pyproj.CRS.from_user_input(extent_proj)
+                if extent_proj is not None
+                else self.pyproj_crs
+            )
             min_x, min_y = transform_coords(extent[0], extent[1], src_crs, dst_crs)
             max_x, max_y = transform_coords(extent[2], extent[3], src_crs, dst_crs)
             ax.set_xlim([min_x, max_x])
@@ -799,18 +813,18 @@ class RasterTile(BaseModel):
 
         return ax
 
-    def __ogr_boundary(self) -> ogr.Geometry:
-        """Outer boundary of the raster geometry as an OGR polygon."""
+    def __proj_geom_boundary(self) -> ProjGeom:
+        """Outer boundary of the raster tile as a projected geometry."""
         boundary = Polygon(self.outer_boundary_corners)
-        return shapely_to_ogr_polygon(boundary, self.epsg)
+        return ProjGeom(boundary, self.crs)
 
     @_align_geom()
-    def __contains__(self, geom: ogr.Geometry) -> bool:
+    def __contains__(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
         """Evaluate if the given geometry is fully within the raster tile.
 
         Parameters
         ----------
-        geom : ogr.Geometry | RasterTile
+        other : ProjGeom | RasterTile
             Other geometry to evaluate a within operation with.
 
         Returns
@@ -819,7 +833,7 @@ class RasterTile(BaseModel):
             True if the given geometry is within the raster tile, false if not.
 
         """
-        return geom.Within(self._boundary)
+        return shapely.within(other.geom, self._boundary.geom)
 
     def __hash__(self) -> str:
         """Return class hash."""
@@ -893,7 +907,7 @@ class RasterTile(BaseModel):
 
         """
         return RasterTile(
-            epsg=self.epsg,
+            crs=self.crs,
             n_rows=self.n_rows,
             n_cols=self.n_cols,
             geotrans=self.geotrans,

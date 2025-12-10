@@ -1,21 +1,17 @@
 import copy
 import random
-import sys
 
 import numpy as np
+import pyproj
 import pytest
-import shapely.wkt as swkt
-from osgeo import ogr, osr
 from shapely import Polygon
 
-from pytileproj._const import DECIMALS
-from pytileproj.geom import get_geog_sref
+from pytileproj._const import DECIMALS, VIS_INSTALLED
+from pytileproj.projgeom import ProjGeom, transform_geometry
 from pytileproj.tile import RasterTile
 
-if "cartopy" in sys.modules:
+if VIS_INSTALLED:
     import cartopy.crs as ccrs
-
-osr.UseExceptions()
 
 
 @pytest.fixture(scope="session")
@@ -29,14 +25,12 @@ def ref_extent() -> tuple:
 
 
 @pytest.fixture(scope="session")
-def ref_boundary(ref_extent: tuple) -> ogr.Geometry:
+def ref_boundary(ref_extent: tuple) -> ProjGeom:
     ll_x, ll_y, ur_x, ur_y = ref_extent
     ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
     sh_geom = Polygon(ref_points)
-    ogr_geom = ogr.CreateGeometryFromWkt(sh_geom.wkt)
-    ogr_geom.AssignSpatialReference(get_geog_sref())
 
-    return ogr_geom
+    return ProjGeom(sh_geom, pyproj.CRS.from_epsg(4326))
 
 
 @pytest.fixture(scope="session")
@@ -64,12 +58,12 @@ def test_from_extent(ref_proj_tile: RasterTile, ref_extent: tuple):
     assert_extent(ref_proj_tile.outer_boundary_extent, ref_extent)
 
 
-def test_from_geom(ref_boundary: ogr.Geometry, pixel_size: float):
+def test_from_geom(ref_boundary: ProjGeom, pixel_size: float):
     proj_tile = RasterTile.from_geometry(ref_boundary, pixel_size, pixel_size)
 
     assert_extent(
         proj_tile.outer_boundary_corners,
-        tuple(swkt.loads(ref_boundary.ExportToWkt()).exterior.coords)[:-1],
+        tuple(ref_boundary.geom.exterior.coords)[:-1],
     )
 
 
@@ -191,10 +185,7 @@ def test_different_sref(
     raster_geom_tchs = RasterTile.from_extent(extent_tchs, epsg, pixel_size, pixel_size)
 
     # reproject to different system
-    other_sref = osr.SpatialReference()
-    other_sref.ImportFromEPSG(3857)
-    geom = raster_geom_tchs.boundary_ogr
-    geom.TransformTo(other_sref)
+    geom = transform_geometry(raster_geom_tchs.boundary, 3857)
 
     assert ref_proj_tile.touches(geom)
 
@@ -216,9 +207,7 @@ def test_plot(ref_proj_tile: RasterTile):
     proj_tile.plot(add_country_borders=True)
 
 
-def test_equal(
-    ref_proj_tile: RasterTile, ref_boundary: ogr.Geometry, pixel_size: float
-):
+def test_equal(ref_proj_tile: RasterTile, ref_boundary: ProjGeom, pixel_size: float):
     other_proj_tile = RasterTile.from_geometry(ref_boundary, pixel_size, pixel_size)
 
     assert ref_proj_tile == other_proj_tile
@@ -272,7 +261,7 @@ def test_tile_dump(
     geotrans = (ul_x, pixel_size, 0, ul_y, 0, -pixel_size)
 
     assert ref_tile_dict["name"] is None
-    assert ref_tile_dict["epsg"] == epsg
+    assert ref_tile_dict["crs"] == epsg
     assert ref_tile_dict["px_origin"] == "ul"
     assert ref_tile_dict["n_rows"] == extent_px_height
     assert ref_tile_dict["n_cols"] == extent_px_width
