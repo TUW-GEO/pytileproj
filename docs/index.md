@@ -1,5 +1,3 @@
-# pytileproj
-
 ```{toctree}
 :hidden:
 :caption: 🔎 Overview
@@ -23,4 +21,7 @@ guides/grid.ipynb
 authors
 changelog
 api
+```
+
+```{include} ./readme.md
 ```

@@ -41,7 +41,30 @@ against our master branch for new features or bug fixes.
 
 ### Development setup
 
-For development you can either use a `conda/mamba` or `uv` environment.
+For development you can either use a `conda/mamba` or `uv` environment. After that you should be able to run `uv run pytest` to run the test suite.
+
+#### uv (recommended)
+Here is an example using only `uv` for creating the environment and managing dependencies.
+
+First, install `uv`:
+
+```bash
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
+Next, create your virtual environment, e.g.
+
+```bash
+uv venv --python 3.12
+```
+
+Finally, you can add all required and optional dependencies to it:
+
+```bash
+uv pip install -r pyproject.toml -e . --extra vis --extra docs
+```
+
+#### mamba
 Here is an example using `mamba` together with `uv` for managing dependencies.
 
 First, install conda and set the path:
@@ -62,17 +85,16 @@ source activate pytileproj
 Install ``gdal` and `uv` with mamba:
 
 ```bash
-mamba install -c conda-forge gdal uv
+mamba install -c conda-forge uv
 ```
 
-Finally, use `uv` to install all other dependencies and `pytileproj` itself:
+Finally, use `uv` to install all other dependencies and `pytileproj` itself, e.g.:
 
 ```bash
 uv pip install -r pyproject.toml --extra vis --extra docs
 uv pip install -e . --no-deps
 ```
 
-After that you should be able to run `uv run pytest` to run the test suite.
 
 ### Guidelines
 
