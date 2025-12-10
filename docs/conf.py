@@ -77,3 +77,10 @@ html_theme = "sphinx_book_theme"
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = "pytileproj-doc"
+
+html_theme_options = {
+    "switcher": {
+        "json_url": "https://tuw-geo.github.io/pytileproj/switcher.json",
+        "version_match": "latest",
+    }
+}
