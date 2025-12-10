@@ -55,7 +55,6 @@ class RegularGrid(BaseModel, extra="allow"):
     _rpts_defs: dict[int, RPTSDefinition] | None = None
     _tiling_defs: dict[int, RegularTilingDefinition] | None = None
     _allowed_samplings: dict[int, list[float | int]] | None = None
-    _congruent: bool = True
 
     _rpts_cls = RegularProjTilingSystem
 
@@ -70,7 +69,6 @@ class RegularGrid(BaseModel, extra="allow"):
         tiling_defs: dict[int, RegularTilingDefinition],
         *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
-        congruent: bool = False,
     ) -> RegularProjTilingSystem:
         """Create regular projected tiling system from grid definitions.
 
@@ -91,10 +89,6 @@ class RegularGrid(BaseModel, extra="allow"):
             Dictionary with tiling levels as keys and allowed samplings as values.
             Defaults to None, which means there are no restrictions for the specified
             sampling.
-        congruent: bool, optional
-            If true, then tilings from adjacent tiling levels need to be congruent,
-            which means that tiles from the higher tiling level need to be exactly
-            in one tile of the lower level. Defaults to false.
 
         Returns
         -------
@@ -107,7 +101,6 @@ class RegularGrid(BaseModel, extra="allow"):
             rpts_def,
             tiling_defs,
             allowed_samplings=allowed_samplings,
-            congruent=congruent,
         )
 
     @classmethod
@@ -118,7 +111,6 @@ class RegularGrid(BaseModel, extra="allow"):
         tiling_defs: dict[int, RegularTilingDefinition],
         *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
-        congruent: bool = False,
     ) -> "RegularGrid":
         """Create a regular grid from grid definitions.
 
@@ -139,10 +131,6 @@ class RegularGrid(BaseModel, extra="allow"):
             Dictionary with tiling levels as keys and allowed samplings as values.
             Defaults to None, which means there are no restrictions for the
             specified sampling.
-        congruent: bool, optional
-            If true, then tilings from adjacent tiling levels need to be congruent,
-            which means that tiles from the higher tiling level need to be exactly
-            in one tile of the lower level. Defaults to false.
 
         Returns
         -------
@@ -157,14 +145,12 @@ class RegularGrid(BaseModel, extra="allow"):
                 sampling,
                 tiling_defs,
                 allowed_samplings=allowed_samplings,
-                congruent=congruent,
             )
 
         rgrid = cls(**tiling_systems)
         rgrid._rpts_defs = rpts_defs
         rgrid._tiling_defs = tiling_defs
         rgrid._allowed_samplings = allowed_samplings
-        rgrid._congruent = congruent
 
         return rgrid
 
@@ -205,14 +191,12 @@ class RegularGrid(BaseModel, extra="allow"):
         allowed_samplings = grid_def["allowed_samplings"]
         if allowed_samplings is not None:
             allowed_samplings = {int(k): v for k, v in allowed_samplings.items()}
-        congruent = grid_def["congruent"]
 
         return cls.from_sampling(
             sampling=sampling,
             rpts_defs=rpts_defs,
             tiling_defs=tiling_defs,
             allowed_samplings=allowed_samplings,
-            congruent=congruent,
         )
 
     def _fetch_mod_grid_def(
@@ -221,7 +205,6 @@ class RegularGrid(BaseModel, extra="allow"):
         dict[str, RPTSDefinition],
         dict[int, RegularTilingDefinition],
         dict[int, list[float | int]],
-        bool,
     ]:
         """Create regular grid system definitions.
 
@@ -237,8 +220,6 @@ class RegularGrid(BaseModel, extra="allow"):
             Tiling definition (stores name/tiling level and tile size).
         Dict[int, List[float | int]]
             Dictionary with tiling levels as keys and allowed samplings as values.
-        bool
-            Are the tiles in the regular tiling systems of the grid congruent?
 
         Notes
         -----
@@ -249,7 +230,6 @@ class RegularGrid(BaseModel, extra="allow"):
         rpts_defs = {}
         tiling_defs = {}
         allowed_samplings = {}
-        congruent = False
         ref_tiling_level = None
         rtps_names = list(self.model_dump().keys())
         for name in rtps_names:
@@ -266,7 +246,6 @@ class RegularGrid(BaseModel, extra="allow"):
                     ).model_dump()
                     tiling_defs[tiling_level] = tiling_def
                 allowed_samplings = rpts.allowed_samplings
-                congruent = rpts.congruent
             rpts_defs[name] = RPTSDefinition(
                 name=name,
                 crs=rpts.crs,
@@ -274,7 +253,7 @@ class RegularGrid(BaseModel, extra="allow"):
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
             ).model_dump()
 
-        return rpts_defs, tiling_defs, allowed_samplings, congruent
+        return rpts_defs, tiling_defs, allowed_samplings
 
     def _fetch_ori_grid_def(
         self,
@@ -298,14 +277,12 @@ class RegularGrid(BaseModel, extra="allow"):
             Tiling definition (stores name/tiling level and tile size).
         Dict[int, List[float | int]]
             Dictionary with tiling levels as keys and allowed samplings as values.
-        bool
-            Are the tiles in the regular tiling systems of the grid congruent?
 
         """
         rpts_def = {k: v.model_dump() for k, v in self._rpts_defs.items()}
         tilings_def = {k: v.model_dump() for k, v in self._tiling_defs.items()}
 
-        return rpts_def, tilings_def, self._allowed_samplings, self._congruent
+        return rpts_def, tilings_def, self._allowed_samplings
 
     def to_grid_def(self, json_path: Path) -> None:
         """Write the regular grid definition to a JSON file.
@@ -317,19 +294,14 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         if not self._rpts_defs:
-            rpts_defs, tiling_defs, allowed_samplings, congruent = (
-                self._fetch_mod_grid_def()
-            )
+            rpts_defs, tiling_defs, allowed_samplings = self._fetch_mod_grid_def()
         else:
-            rpts_defs, tiling_defs, allowed_samplings, congruent = (
-                self._fetch_ori_grid_def()
-            )
+            rpts_defs, tiling_defs, allowed_samplings = self._fetch_ori_grid_def()
 
         grid_def = {}
         grid_def["rpts_defs"] = rpts_defs
         grid_def["tiling_defs"] = tiling_defs
         grid_def["allowed_samplings"] = allowed_samplings
-        grid_def["congruent"] = congruent
         grid_def = json.dumps(grid_def, indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(grid_def)

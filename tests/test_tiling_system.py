@@ -9,10 +9,10 @@ from osgeo import osr
 from pytileproj.tile import RasterTile
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
-    ProjSystemBase,
-    ProjTilingSystemBase,
+    ProjSystem,
+    ProjTilingSystem,
     RegularProjTilingSystem,
-    TilingSystemBase,
+    TilingSystem,
 )
 
 osr.UseExceptions()
@@ -56,7 +56,7 @@ def e7eu_grid_invalid():
 
 @pytest.fixture(scope="module")
 def e7eu_psb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
-    return ProjTilingSystemBase(
+    return ProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
         crs=27704,
@@ -73,7 +73,7 @@ def e7eu_rpsb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
 
 
 def test_projsystembase():
-    e7eu = ProjSystemBase(crs=27704)
+    e7eu = ProjSystem(crs=27704)
 
     lon, lat = 16.37, 48.19
     e7_coord = e7eu.lonlat_to_xy(lon, lat)
@@ -88,13 +88,13 @@ def test_projsystembase():
 
 def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
     grids = {grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]}
-    gsb = TilingSystemBase(name="e7eu", tilings=grids)
+    gsb = TilingSystem(name="e7eu", tilings=grids)
     ref_len = 2
     assert len(gsb) == ref_len
 
     json_path = Path("test_gridsystembase.json")
     gsb.to_file(json_path)
-    gsb2 = TilingSystemBase.from_file(json_path)
+    gsb2 = TilingSystem.from_file(json_path)
 
     assert gsb[0].to_ogc_repr() == gsb2[0].to_ogc_repr()
     assert gsb[1].to_ogc_repr() == gsb2[1].to_ogc_repr()
@@ -102,14 +102,14 @@ def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling
     json_path.unlink()
 
 
-def test_projgridsystembase_tile(e7eu_psb: ProjTilingSystemBase):
+def test_projgridsystembase_tile(e7eu_psb: ProjTilingSystem):
     e7_tile = RasterTile.from_extent(
         [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
     )
     assert e7_tile in e7eu_psb
 
 
-def test_projgridsystembase_mask(e7eu_psb: ProjTilingSystemBase):
+def test_projgridsystembase_mask(e7eu_psb: ProjTilingSystem):
     e7_tile = RasterTile.from_extent(
         [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
     )
@@ -161,31 +161,29 @@ def test_reg_pgs_raster_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
 
 
 def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
-    try:
-        _ = RegularProjTilingSystem(
-            name="e7eu",
-            tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
-            crs=27704,
-            congruent=True,
-        )
-        raise AssertionError
-    except ValueError:
-        assert True
+    rpts = RegularProjTilingSystem(
+        name="e7eu",
+        tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
+        crs=27704,
+    )
+
+    assert not rpts.is_congruent
 
     new_grid = RegularTiling(
         name="e7eut3",
-        extent=[0, 0, 8660000, 6020000],
+        extent=[0, 0, 8_660_000, 6_020_000],
         sampling=20,
-        tile_shape_px=(10000, 10000),
+        tile_shape_px=(10_000, 10_000),
         tiling_level=0,
         axis_orientation=["E", "S"],
     )
-    _ = RegularProjTilingSystem(
+    rpts = RegularProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, new_grid]},
         crs=27704,
-        congruent=True,
     )
+
+    assert rpts.is_congruent
 
 
 def test_allowed_samplings(e7eu_grid_t1: RegularTiling):
@@ -222,11 +220,11 @@ def test_plot(e7eu_rpsb: RegularProjTilingSystem):
 
 
 def test_proj_zone_geog_io():
-    e7eu_ref = ProjSystemBase(crs=27704)
+    e7eu_ref = ProjSystem(crs=27704)
     json_path = Path("test_proj_zone_geog.json")
     e7eu_ref.export_proj_zone_geog(json_path)
 
-    e7eu = ProjSystemBase(crs=27704, proj_zone_geog=json_path)
+    e7eu = ProjSystem(crs=27704, proj_zone_geog=json_path)
     json_path.unlink()
 
     assert e7eu._proj_zone_geog.geom.wkt == e7eu_ref._proj_zone_geog.geom.wkt  # noqa: SLF001

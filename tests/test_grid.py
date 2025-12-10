@@ -127,7 +127,6 @@ def test_tiling_defs_multi(
     assert e7grid_from_def._rpts_defs == e7grid_to_def._rpts_defs  # noqa: SLF001
     assert e7grid_from_def._tiling_defs == e7grid_to_def._tiling_defs  # noqa: SLF001
     assert e7grid_from_def._allowed_samplings == e7grid_to_def._allowed_samplings  # noqa: SLF001
-    assert e7grid_from_def._congruent == e7grid_to_def._congruent  # noqa: SLF001
 
 
 def test_tiling_defs_multi_sampling_diff(

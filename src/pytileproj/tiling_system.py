@@ -70,16 +70,16 @@ RasterTileGenerator = Generator[RasterTile, RasterTile, RasterTile]
 __all__ = [
     "IrregularProjTilingSystem",
     "ProjCoord",
-    "ProjSystemBase",
-    "ProjTilingSystemBase",
+    "ProjSystem",
+    "ProjTilingSystem",
     "RPTSDefinition",
     "RegularProjTilingSystem",
     "RegularTilingDefinition",
-    "TilingSystemBase",
+    "TilingSystem",
 ]
 
 
-class ProjSystemBase(BaseModel, arbitrary_types_allowed=True):
+class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     """Base class defining a projection represented by an EPSG code and a zone."""
 
     crs: Any
@@ -259,7 +259,7 @@ def validate_samplings(
                 raise ValueError(err_msg)
 
 
-class TilingSystemBase(BaseModel):
+class TilingSystem(BaseModel):
     """Base class defining a multi-level tiling system."""
 
     name: str
@@ -267,7 +267,7 @@ class TilingSystemBase(BaseModel):
     allowed_samplings: dict[int, list[int | float]] | None = None
 
     @model_validator(mode="after")
-    def check_samplings(self) -> "TilingSystemBase":
+    def check_samplings(self) -> "TilingSystem":
         """Check the given user samplings.
 
         Check the sampling defined in a tiling corresponds to the
@@ -277,7 +277,7 @@ class TilingSystemBase(BaseModel):
         return self
 
     @classmethod
-    def from_file(cls, json_path: Path) -> "TilingSystemBase":
+    def from_file(cls, json_path: Path) -> "TilingSystem":
         """Initialise tiling system class from the settings stored within a JSON file.
 
         Parameters
@@ -412,7 +412,7 @@ class TilingSystemBase(BaseModel):
         return self.tilings[tiling_level]
 
 
-class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
+class ProjTilingSystem(TilingSystem, ProjSystem):
     """Base class defining a projected, multi-level tiling system."""
 
     tiles_in_zone_only: bool = True
@@ -833,9 +833,7 @@ class ProjTilingSystemBase(TilingSystemBase, ProjSystemBase):
         return super().__contains__(arg)
 
 
-def validate_tilings(
-    tilings: dict[int, RegularTiling], *, congruent: bool = False
-) -> None:
+def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
     """Validate if different regular tilings are compliant with each other.
 
     This means they need to:
@@ -843,16 +841,11 @@ def validate_tilings(
         - have the same extent
         - have the same orientation
         - increase the number of tiles with increasing tiling level
-        - be congruent if required.
 
     Parameters
     ----------
     tilings: dict[int, RegularTiling]
         Dictionary with tiling/zoom levels as keys and regular tilings as values.
-    congruent: bool, optional
-        If true, then tilings from adjacent tiling levels need to be congruent,
-        which means that tiles from the higher tiling level need to be exactly
-        in one tile of the lower level. Defaults to false.
 
     Raises
     ------
@@ -866,7 +859,7 @@ def validate_tilings(
         tiling = tilings[tiling_level]
 
         same_origin = ref_tiling.origin_xy == tiling.origin_xy
-        if not same_origin and congruent:
+        if not same_origin:
             ref_tiling_str = f"{ref_tiling.tiling_level}:{ref_tiling.origin_xy}"
             tiling_str = f"{tiling.tiling_level}:{tiling.origin_xy}"
             err_hdr = "The given tilings do not have the same origin:"
@@ -874,7 +867,7 @@ def validate_tilings(
             raise ValueError(err_msg)
 
         same_extent = ref_tiling.extent == tiling.extent
-        if not same_extent and congruent:
+        if not same_extent:
             ref_tiling_str = f"{ref_tiling.tiling_level}:{ref_tiling.extent}"
             tiling_str = f"{tiling.tiling_level}:{tiling.extent}"
             err_hdr = "The given tilings do not have the same extent:"
@@ -899,13 +892,6 @@ def validate_tilings(
             err_msg = f"{err_hdr} {ref_tiling_str} vs. {tiling_str}."
             raise ValueError(err_msg)
 
-        if congruent and ((n_rows % ref_n_rows != 0) or (n_cols % ref_n_cols != 0)):
-            ref_tiling_str = f"{ref_tiling.tiling_level} ({ref_n_rows},{ref_n_cols})"
-            tiling_str = f"{tiling_level} ({n_rows},{n_cols})"
-            err_hdr = "The given tiles in the tilings are not congruent:"
-            err_msg = f"{err_hdr} {ref_tiling_str} vs. {tiling_str}."
-            raise ValueError(err_msg)
-
         ref_tiling = tiling
 
 
@@ -925,10 +911,8 @@ class RegularTilingDefinition(BaseModel):
     tile_size: float | int
 
 
-class RegularProjTilingSystem(ProjTilingSystemBase):
+class RegularProjTilingSystem(ProjTilingSystem):
     """Regular projected, multi-level tiling system."""
-
-    congruent: bool | None = False
 
     _tms: TileMatrixSet
 
@@ -952,7 +936,6 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         tiling_defs: dict[int, RegularTilingDefinition],
         *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
-        congruent: bool = False,
     ) -> "RegularProjTilingSystem":
         """Classmethod for creating a regular, projected tiling system.
 
@@ -974,10 +957,6 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             Dictionary with tiling levels as keys and allowed samplings as values.
             Defaults to None, which means there are no restrictions for the specified
             sampling.
-        congruent: bool, optional
-            If true, then tilings from adjacent tiling levels need to be congruent,
-            which means that tiles from the higher tiling level need to be exactly in
-            one tile of the lower level. Defaults to false.
 
         Returns
         -------
@@ -1012,14 +991,13 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             name=rpts_def.name,
             crs=rpts_def.crs,
             tilings=tilings,
-            congruent=congruent,
             allowed_samplings=allowed_samplings,
         )
 
     @model_validator(mode="after")
     def check_tilings(self) -> "RegularProjTilingSystem":
         """Validate if different regular tilings are compliant with each other."""
-        validate_tilings(self.tilings, congruent=self.congruent)
+        validate_regular_tilings(self.tilings)
         return self
 
     @property
@@ -1039,6 +1017,31 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
         """Number of tiles at the highest tiling level in Y direction."""
         max_tiling_level = max(self.tiling_levels)
         return self[max_tiling_level].tm.matrixHeight
+
+    @property
+    def is_congruent(self) -> bool:
+        """Check if tilings from different levels are congruent.
+
+        Tilings from adjacent tiling levels are congruent, if tiles from the
+        higher tiling level (fine tiling) are exactly a multiple of the tiles
+        at the lower level (coarse tiling).
+        """
+        is_congruent = True
+        tiling_levels = sorted(self.tilings.keys())
+        ref_tiling = self.tilings[tiling_levels[0]]
+        for tiling_level in tiling_levels[1:]:
+            tiling = self.tilings[tiling_level]
+            ref_n_rows, ref_n_cols = (
+                ref_tiling.tm.matrixHeight,
+                ref_tiling.tm.matrixWidth,
+            )
+            n_rows, n_cols = tiling.tm.matrixHeight, tiling.tm.matrixWidth
+
+            if (n_rows % ref_n_rows != 0) or (n_cols % ref_n_cols != 0):
+                is_congruent = False
+                break
+
+        return is_congruent
 
     def n_tiles_x(self, tiling_level: int) -> int:
         """Return the number of tiles in X direction at the given tiling.
@@ -1298,7 +1301,7 @@ class RegularProjTilingSystem(ProjTilingSystemBase):
             yield raster_tile
 
 
-class IrregularProjTilingSystem(ProjTilingSystemBase):
+class IrregularProjTilingSystem(ProjTilingSystem):
     """Irregular projected, multi-level tiling system."""
 
     def _create_tilename(self, tile: IrregularTile) -> str:
