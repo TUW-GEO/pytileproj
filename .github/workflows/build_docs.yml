@@ -51,16 +51,19 @@ jobs:
 
       - name: Generate version switcher
         run: |
-          echo "[" > ./docs/_build/html/switcher.json
-          echo "{\"name\": \"latest\", \"url\": \"/latest/\"}," >> ./docs/_build/html/switcher.json
+          REPO="${{ github.event.repository.name }}"
+          OUT="docs/_build/switcher.json"
+
+          echo "[" > "$OUT"
+          echo "{\"name\": \"latest\", \"url\": \"/$REPO/latest/\"}," >> "$OUT"
 
           TAGS=$(git tag --sort=version:refname)
           for TAG in $TAGS; do
-            echo "{\"name\": \"$TAG\", \"url\": \"/$TAG/\"}," >> ./docs/_build/html/switcher.json
+            echo "{\"name\": \"$TAG\", \"url\": \"/$REPO/$TAG/\"}," >> "$OUT"
           done
 
-          sed -i '$ s/,$//g' ./docs/_build/html/switcher.json  # remove trailing comma
-          echo "]" >> ./docs/_build/html/switcher.json
+          sed -i '$ s/,$//' "$OUT"
+          echo "]" >> "$OUT"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
