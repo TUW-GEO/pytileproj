@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from morecantile.models import Tile
 
+from pytileproj._errors import GeomOutOfZoneError
 from pytileproj.tile import RasterTile
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
@@ -79,8 +80,11 @@ def test_projsystembase():
     assert math.isclose(geog_coord_2.y, lat, rel_tol=0.01)
 
     lon, lat = 0, 0
-    e7_coord = e7eu.lonlat_to_xy(lon, lat)
-    assert e7_coord is None
+    try:
+        e7_coord = e7eu.lonlat_to_xy(lon, lat)
+        raise AssertionError
+    except GeomOutOfZoneError:
+        assert True
 
 
 def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):

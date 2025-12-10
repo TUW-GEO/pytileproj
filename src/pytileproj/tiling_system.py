@@ -35,12 +35,13 @@ from typing import Annotated, Any, Literal, Union
 
 import numpy as np
 import pyproj
-import shapely.wkt
+import shapely
 from morecantile.models import Tile as RegularTile
 from morecantile.models import TileMatrixSet
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
 from pytileproj._const import JSON_INDENT, VIS_INSTALLED
+from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj.projgeom import (
     ProjCoord,
     ProjGeom,
@@ -161,10 +162,12 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         if self._lonlat_inside_proj(lon, lat):
             x, y = self._from_geog.transform(lon, lat)
             coord = ProjCoord(x, y, self._crs)
+        else:
+            raise GeomOutOfZoneError(shapely.Point((lon, lat)))
 
         return coord
 
-    def xy_to_lonlat(self, x: float, y: float) -> ProjCoord | None:
+    def xy_to_lonlat(self, x: float, y: float) -> ProjCoord:
         """Convert projected to a geographic coordinates.
 
         Parameters
@@ -180,11 +183,16 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
             Longitude and latitude coordinates if the given input
             coordinates are within the projection zone, None if not.
 
+        Raises
+        ------
+        OutOfBoundsError
+            If the given point is not within the projection zone.
+
         """
         lon, lat = self._to_geog.transform(x, y)
         coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
         if not self._lonlat_inside_proj(lon, lat):
-            coord = None
+            raise GeomOutOfZoneError(shapely.Point((x, y)))
 
         return coord
 
@@ -359,8 +367,6 @@ class TilingSystem(BaseModel):
 class ProjTilingSystem(TilingSystem, ProjSystem):
     """Base class defining a projected, multi-level tiling system."""
 
-    tiles_in_zone_only: bool = True
-
     def get_tile_from_lonlat(
         self, lon: float, lat: float, tiling_level: int
     ) -> RasterTile:
@@ -488,11 +494,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             True if the given tile is within the projection zone.
 
         """
-        tile_in_zone = True
-        if self.tiles_in_zone_only:
-            tile_in_zone = shapely.intersects(tile.boundary.geom, self._proj_zone.geom)
-
-        return tile_in_zone
+        return shapely.intersects(tile.boundary.geom, self._proj_zone.geom)
 
     def _get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
@@ -1134,8 +1136,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
         tile = RegularTile(x, y, tiling_level)
         tilename = self._tile_to_name(tile)
         raster_tile = self._tile_to_raster_tile(tile, name=tilename)
-        if self.tiles_in_zone_only and not self._tile_in_zone(raster_tile):
-            raster_tile = None
+        if not self._tile_in_zone(raster_tile):
+            raise TileOutOfZoneError(raster_tile)
 
         return raster_tile
 
@@ -1229,7 +1231,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         for tile in self._get_tiles_in_geog_bbox(bbox, tiling_level):
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, name=tilename)
-            if self.tiles_in_zone_only and not self._tile_in_zone(raster_tile):
+            if not self._tile_in_zone(raster_tile):
                 continue
 
             yield raster_tile
