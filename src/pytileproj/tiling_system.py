@@ -48,7 +48,6 @@ from pytileproj.projgeom import (
     fetch_proj_zone,
     pyproj_to_cartopy_crs,
     rasterise_polygon,
-    transform_geom_to_geog,
     transform_geometry,
 )
 from pytileproj.tile import IrregularTile, RasterTile
@@ -135,6 +134,11 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     def pyproj_crs(self) -> pyproj.CRS:
         """Return PyProj representation of CRS."""
         return self._crs
+
+    @property
+    def unit(self) -> str:
+        """Return projection unit."""
+        return self._crs.prime_meridian.unit_name
 
     def lonlat_to_xy(self, lon: float, lat: float) -> ProjCoord | None:
         """Convert geographic to a projected coordinates.
@@ -314,66 +318,6 @@ class TilingSystem(BaseModel):
         """Return tiling levels."""
         return list(self.tilings.keys())
 
-    def _create_tilename(self, tile: AnyTile) -> str:
-        """Create a tilename from a given tile object.
-
-        Parameters
-        ----------
-        tile: AnyTile
-            Tile object.
-
-        Returns
-        -------
-        str
-            Tilename.
-
-        Raises
-        ------
-        NotImplementedError
-            This function needs to be overwritten by a child class.
-
-        """
-        raise NotImplementedError
-
-    def _create_tile(self, tilename: str) -> AnyTile:
-        """Create a tile object from a given tilename.
-
-        Parameters
-        ----------
-        tilename: str
-            Tilename.
-
-        Returns
-        -------
-        AnyTile
-            Tile object.
-
-        Raises
-        ------
-        NotImplementedError
-            This function needs to be overwritten by a child class.
-
-        """
-        raise NotImplementedError
-
-    def _tilenames_at_level(self, tiling_level: int) -> Generator[str, str, str]:
-        """Return all tilenames at a specific tiling level or zoom.
-
-        Parameters
-        ----------
-        tiling_level: int
-            Tiling level or zoom.
-
-        Returns
-        -------
-        Generator[str, str, str]
-            Yields one tilename after the other.
-
-        """
-        tiling = self[tiling_level]
-        for tile in tiling:
-            yield self._create_tilename(tile)
-
     def _tiles_at_level(self, tiling_level: int) -> TileGenerator:
         """Return all tiles at a specific tiling level or zoom.
 
@@ -417,10 +361,10 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
     tiles_in_zone_only: bool = True
 
-    def create_tile_from_lonlat(
+    def get_tile_from_lonlat(
         self, lon: float, lat: float, tiling_level: int
     ) -> RasterTile:
-        """Create a raster tile object from geographic coordinates.
+        """Get a raster tile object from geographic coordinates.
 
         Parameters
         ----------
@@ -438,10 +382,10 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         """
         geog_coord = ProjCoord(lon, lat, 4326)
-        return self.create_tile_from_coord(geog_coord, tiling_level)
+        return self.get_tile_from_coord(geog_coord, tiling_level)
 
-    def create_tile_from_xy(self, x: float, y: float, tiling_level: int) -> RasterTile:
-        """Create a raster tile object from projected coordinates.
+    def get_tile_from_xy(self, x: float, y: float, tiling_level: int) -> RasterTile:
+        """Get a raster tile object from projected coordinates.
 
         Parameters
         ----------
@@ -459,10 +403,10 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         """
         proj_coord = ProjCoord(x, y, self.epsg)
-        return self.create_tile_from_coord(proj_coord, tiling_level)
+        return self.get_tile_from_coord(proj_coord, tiling_level)
 
-    def create_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
-        """Create a raster tile object from projected coordinates.
+    def get_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+        """Get a raster tile object from projected coordinates.
 
         Parameters
         ----------
@@ -484,12 +428,16 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def create_tile(self, tilename: str) -> RasterTile:
-        """Create a raster tile object from a given tilename.
+    def _tile_to_raster_tile(
+        self, tile: AnyTile, name: str | None = None
+    ) -> RasterTile:
+        """Create a raster tile object from a given tile.
 
         Parameters
         ----------
-        tilename: str
+        tile: AnyTile
+            Simple tile object.
+        name: str | None, optional
             Tilename.
 
         Returns
@@ -505,20 +453,18 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def _to_raster_tile(self, tile: AnyTile, name: str | None = None) -> RasterTile:
-        """Create a raster tile object from a given tile.
+    def _tile_to_name(self, tile: AnyTile) -> str:
+        """Create a tilename from a given tile object.
 
         Parameters
         ----------
         tile: AnyTile
-            Simple tile object.
-        name: str | None, optional
-            Tilename.
+            Tile object.
 
         Returns
         -------
-        RasterTile
-            Raster tile object.
+        str
+            Tilename.
 
         Raises
         ------
@@ -548,24 +494,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         return tile_in_zone
 
-    def get_tile_bbox_geog(self, tilename: str) -> ProjGeom:
-        """Return the boundary of the tile corresponding to the given tilename.
-
-        Parameters
-        ----------
-        tilename: str
-            Tilename.
-
-        Returns
-        -------
-        ProjGeom
-            Tile boundary.
-
-        """
-        raster_tile = self.create_tile(tilename)
-        return transform_geom_to_geog(raster_tile.boundary)
-
-    def _search_tiles_in_geog_bbox(
+    def _get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
     ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
@@ -590,7 +519,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def tile_mask(self, raster_tile: RasterTile) -> np.ndarray:
+    def get_tile_mask(self, raster_tile: RasterTile) -> np.ndarray:
         """Compute tile mask w.r.t. projection zone.
 
         Compute a binary array representation of the given raster tile, where each
@@ -723,8 +652,8 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             ax.add_feature(cartopy.feature.BORDERS)
 
         for tile in self[tiling_level]:
-            tilename = self._create_tilename(tile)
-            raster_tile = self._to_raster_tile(tile, tilename)
+            tilename = self._tile_to_name(tile)
+            raster_tile = self._tile_to_raster_tile(tile, tilename)
             if self._tile_in_zone(raster_tile):
                 patch = PolygonPatch(
                     list(raster_tile.boundary_shapely.exterior.coords),
@@ -784,10 +713,10 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         return ax
 
-    def search_tiles_in_geog_bbox(
+    def get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
     ) -> RasterTileGenerator:
-        """Search for tiles intersecting with the geographic bounding box.
+        """Get all tiles intersecting with the geographic bounding box.
 
         Parameters
         ----------
@@ -1145,7 +1074,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         return cls(name, epsg, tilings)
 
-    def _create_tilename(self, tile: RegularTile) -> str:
+    def _tile_to_name(self, tile: RegularTile) -> str:
         """Create a tilename from a given regular tile object.
 
         Parameters
@@ -1159,15 +1088,13 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Tilename.
 
         """
-        x_ori, y_ori = self.axis_orientation
         n_digits_xy = len(str(max(self.max_n_tiles_x, self.max_n_tiles_y)))
-        n_digits_z = len(str(len(self) - 1))
-        x_label = f"{x_ori}{tile.x:0{n_digits_xy}}"
-        y_label = f"{y_ori}{tile.y:0{n_digits_xy}}"
-        z_label = f"T{tile.z:0{n_digits_z}}"
+        x_label = f"X{tile.x:0{n_digits_xy}}"
+        y_label = f"Y{tile.y:0{n_digits_xy}}"
+        z_label = f"T{tile.z:02}"
         return x_label + y_label + z_label
 
-    def _create_tile(self, tilename: str) -> RegularTile:
+    def _name_to_tile(self, tilename: str) -> RegularTile:
         """Create a regular tile object from a given tilename.
 
         Parameters
@@ -1181,19 +1108,22 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Regular tile object.
 
         """
-        _, y_ori = self.axis_orientation
         tiling_level = int(tilename.split("T")[-1])
-        x = int(tilename.split(y_ori)[0][1:])
-        y = int(tilename.split(y_ori)[1].split("T")[0])
+        x = int(tilename.split("Y")[0][1:])
+        y = int(tilename.split("Y")[1].split("T")[0])
         return RegularTile(x, y, tiling_level)
 
-    def create_tile(self, tilename: str) -> RasterTile:
-        """Create a raster tile object from a given tilename.
+    def get_tile_from_index(self, x: int, y: int, tiling_level: int) -> RasterTile:
+        """Get a raster tile object from the given tile index.
 
         Parameters
         ----------
-        tilename: str
-            Tilename.
+        x: int
+            Horizontal index.
+        y: int
+            Verctical index.
+        tiling_level: int
+            Tiling level or zoom.
 
         Returns
         -------
@@ -1201,15 +1131,16 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Raster tile object.
 
         """
-        tile = self._create_tile(tilename)
-        raster_tile = self._to_raster_tile(tile, name=tilename)
+        tile = RegularTile(x, y, tiling_level)
+        tilename = self._tile_to_name(tile)
+        raster_tile = self._tile_to_raster_tile(tile, name=tilename)
         if self.tiles_in_zone_only and not self._tile_in_zone(raster_tile):
             raster_tile = None
 
         return raster_tile
 
-    def create_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
-        """Create a raster tile object from projected coordinates.
+    def get_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+        """Get a raster tile object from projected coordinates.
 
         Parameters
         ----------
@@ -1230,10 +1161,12 @@ class RegularProjTilingSystem(ProjTilingSystem):
             tiling_level,
             geographic_crs=coord.crs,
         )
-        tilename = self._create_tilename(tile)
-        return self._to_raster_tile(tile, name=tilename)
+        tilename = self._tile_to_name(tile)
+        return self._tile_to_raster_tile(tile, name=tilename)
 
-    def _to_raster_tile(self, tile: RegularTile, name: str | None = None) -> RasterTile:
+    def _tile_to_raster_tile(
+        self, tile: RegularTile, name: str | None = None
+    ) -> RasterTile:
         """Create a raster tile object from a given regular tile.
 
         Parameters
@@ -1253,7 +1186,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
-    def _search_tiles_in_geog_bbox(
+    def _get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
     ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
@@ -1274,10 +1207,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
         min_x, min_y, max_x, max_y = bbox
         return self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
 
-    def search_tiles_in_geog_bbox(
+    def get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
     ) -> RasterTileGenerator:
-        """Search for tiles intersecting with the geographic bounding box.
+        """Get all tiles intersecting with the geographic bounding box.
 
         Parameters
         ----------
@@ -1289,12 +1222,13 @@ class RegularProjTilingSystem(ProjTilingSystem):
         Returns
         -------
         RasterTileGenerator
-            Yields raster tile after tile, which intersects with the given bounding box.
+            Yields raster tile after tile, which intersects with the given
+            bounding box.
 
         """
-        for tile in self._search_tiles_in_geog_bbox(bbox, tiling_level):
-            tilename = self._create_tilename(tile)
-            raster_tile = self._to_raster_tile(tile, name=tilename)
+        for tile in self._get_tiles_in_geog_bbox(bbox, tiling_level):
+            tilename = self._tile_to_name(tile)
+            raster_tile = self._tile_to_raster_tile(tile, name=tilename)
             if self.tiles_in_zone_only and not self._tile_in_zone(raster_tile):
                 continue
 
@@ -1304,27 +1238,11 @@ class RegularProjTilingSystem(ProjTilingSystem):
 class IrregularProjTilingSystem(ProjTilingSystem):
     """Irregular projected, multi-level tiling system."""
 
-    def _create_tilename(self, tile: IrregularTile) -> str:
-        """Create a tilename from a given irregular tile object.
-
-        Parameters
-        ----------
-        tile: IrregularTile
-            Irregular tile object.
-
-        Returns
-        -------
-        str
-            Tilename.
-
-        """
-        return tile.id
-
     def _tilename_to_level(self, tilename: str) -> str:
         return int(tilename.split("T")[-1])
 
-    def _create_tile(self, tilename: str) -> IrregularTile:
-        """Create an irregular tile object from a given tilename.
+    def _get_tile(self, tilename: str) -> IrregularTile:
+        """Get an irregular tile object from a given tilename.
 
         Parameters
         ----------
@@ -1340,8 +1258,8 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         tiling_level = self._tilename_to_level(tilename)
         return self[tiling_level].tiles[tilename]
 
-    def create_tile(self, tilename: str) -> RasterTile:
-        """Create a raster tile object from a given tilename.
+    def get_tile_from_name(self, tilename: str) -> RasterTile:
+        """Get a raster tile object from a given tilename.
 
         Parameters
         ----------
@@ -1354,8 +1272,8 @@ class IrregularProjTilingSystem(ProjTilingSystem):
             Raster tile object.
 
         """
-        tile = self._create_tile(tilename)
-        raster_tile = self._to_raster_tile(tile, name=tilename)
+        tile = self._get_tile(tilename)
+        raster_tile = self._tile_to_raster_tile(tile, name=tilename)
         if self.tiles_in_zone_only and not shapely.intersects(
             raster_tile.boundary.geom, self._proj_zone.geom
         ):
@@ -1363,7 +1281,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
 
         return raster_tile
 
-    def _to_raster_tile(
+    def _tile_to_raster_tile(
         self, tile: IrregularTile, name: str | None = None
     ) -> RasterTile:
         """Create a raster tile object from a given irregular tile.
@@ -1385,10 +1303,10 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
-    def search_tiles_in_geog_bbox(
+    def get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int
     ) -> RasterTileGenerator:
-        """Search for tiles intersecting with the geographic bounding box.
+        """Get all tiles intersecting with the geographic bounding box.
 
         Parameters
         ----------
@@ -1404,8 +1322,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
 
         """
         for tile in self[tiling_level].tiles_in_bbox(bbox):
-            tilename = self._create_tilename(tile)
-            raster_tile = self._to_raster_tile(tile, name=tilename)
+            raster_tile = self._tile_to_raster_tile(tile, name=tile.id)
             if self.tiles_in_zone_only and not shapely.intersects(
                 raster_tile.boundary.geom, self._proj_zone.geom
             ):

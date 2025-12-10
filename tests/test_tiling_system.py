@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 from morecantile.models import Tile
-from osgeo import osr
 
 from pytileproj.tile import RasterTile
 from pytileproj.tiling import RegularTiling
@@ -14,8 +13,6 @@ from pytileproj.tiling_system import (
     RegularProjTilingSystem,
     TilingSystem,
 )
-
-osr.UseExceptions()
 
 
 @pytest.fixture(scope="module")
@@ -113,11 +110,11 @@ def test_projgridsystembase_mask(e7eu_psb: ProjTilingSystem):
     e7_tile = RasterTile.from_extent(
         [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
     )
-    tile_mask = e7eu_psb.tile_mask(e7_tile)
+    tile_mask = e7eu_psb.get_tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.ones((10000, 10000)))
 
     e7_tile = RasterTile.from_extent([0, 0, 100000, 100000], 27704, 10, 10)
-    tile_mask = e7eu_psb.tile_mask(e7_tile)
+    tile_mask = e7eu_psb.get_tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.zeros((10000, 10000)))
 
 
@@ -138,17 +135,16 @@ def test_reg_pgs_invalid(
 
 
 def test_reg_pgs_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
-    tilename_1 = e7eu_rpsb._create_tilename(Tile(x=37, y=23, z=0))  # noqa: SLF001
-    tile = e7eu_rpsb._create_tile(tilename_1)  # noqa: SLF001
-    tilename_2 = e7eu_rpsb._create_tilename(tile)  # noqa: SLF001
-    assert tilename_1 == tilename_2
+    tile_1 = Tile(x=15, y=10, z=0)
+    tilename_1 = e7eu_rpsb._tile_to_name(tile_1)  # noqa: SLF001
+    raster_tile = e7eu_rpsb.get_tile_from_index(*tile_1)
+    assert tilename_1 == raster_tile.name
 
 
 def test_reg_pgs_raster_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
     tile = Tile(x=37, y=23, z=1)
-    tilename_1 = e7eu_rpsb._create_tilename(tile)  # noqa: SLF001
-    raster_tile = e7eu_rpsb.create_tile(tilename_1)
-    assert raster_tile.name == "E37S23T1"
+    raster_tile = e7eu_rpsb.get_tile_from_index(*tile)
+    assert raster_tile.name == "X37Y23T01"
     assert raster_tile.shape == (10000, 10000)
     assert raster_tile.geotrans == (
         e7eu_rpsb[0].origin_xy[0] + 10000 * 10 * tile.x,

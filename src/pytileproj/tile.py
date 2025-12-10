@@ -277,6 +277,11 @@ class RasterTile(BaseModel):
         return self._crs
 
     @property
+    def unit(self) -> str:
+        """Return projection unit."""
+        return self._crs.prime_meridian.unit_name
+
+    @property
     def ori(self) -> float:
         """Counter-clockwise orientation of the raster tile.
 

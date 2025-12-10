@@ -268,5 +268,9 @@ def test_tile_dump(
     assert ref_tile_dict["geotrans"] == geotrans
 
 
+def test_unit(ref_proj_tile: RasterTile):
+    assert ref_proj_tile.unit == "degree"
+
+
 if __name__ == "__main__":
     pass
