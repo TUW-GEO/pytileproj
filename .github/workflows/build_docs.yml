@@ -43,11 +43,8 @@ jobs:
 
       - name: Create docs
         run: |
-            cd docs
-            make html
-        env:
-            SPHINXBUILD: 'uv run python -m sphinx.cmd.build'
-            BUILDDIR: _build/latest
+            rm -rf docs/_build
+            uv run python -m sphinx.cmd.build -b html docs docs/_build/latest
 
       - name: Generate version switcher
         run: |
