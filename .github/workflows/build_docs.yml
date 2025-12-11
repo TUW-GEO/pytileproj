@@ -57,6 +57,7 @@ jobs:
           TAGS=$(git tag --sort=version:refname)
           echo $TAGS
           for TAG in $TAGS; do
+            cp -R docs/_build/latest docs/_build/$TAG
             echo "{\"name\": \"$TAG\", \"url\": \"/$REPO/$TAG/\"}," >> "$OUT"
           done
 
