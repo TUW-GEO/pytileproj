@@ -51,6 +51,7 @@ jobs:
           TAGS=$(git tag --sort=version:refname)
           echo $TAGS
           uv pip list
+          echo "hello"
 
       - name: Generate version switcher
         run: |
