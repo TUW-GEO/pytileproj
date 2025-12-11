@@ -47,11 +47,12 @@ jobs:
             make html
         env:
             SPHINXBUILD: 'uv run python -m sphinx.cmd.build'
+            BUILDDIR: _build/latest
 
       - name: Generate version switcher
         run: |
           REPO="${{ github.event.repository.name }}"
-          OUT="./docs/_build/html/switcher.json"
+          OUT="./docs/_build/switcher.json"
 
           echo "[" > "$OUT"
           echo "{\"name\": \"latest\", \"url\": \"/$REPO/latest/\"}," >> "$OUT"
@@ -64,10 +65,20 @@ jobs:
           sed -i '$ s/,$//' "$OUT"
           echo "]" >> "$OUT"
 
+      - name: Create redirect index.html
+        run: |
+          cat <<EOF > docs/_build/index.html
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="0; url=./latest/">
+            </head>
+          </html>
+          EOF
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './docs/_build/html'
+          path: './docs/_build/latest'
 
       - name: Deploy to GitHub Pages
         id: deployment
