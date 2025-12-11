@@ -46,6 +46,11 @@ jobs:
             rm -rf docs/_build
             uv run python -m sphinx.cmd.build -b html docs docs/_build/latest
 
+      - name: Test git
+        run: |
+          TAGS=$(git tag --sort=version:refname)
+          echo $TAGS
+
       - name: Generate version switcher
         run: |
           REPO="${{ github.event.repository.name }}"
