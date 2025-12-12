@@ -8,3 +8,5 @@ JSON_INDENT = 4  # indentation for JSON strings
 VIS_INSTALLED = None not in [
     importlib.util.find_spec(pkg) for pkg in ["matplotlib", "cartopy"]
 ]
+
+GEO_INSTALLED = None not in [importlib.util.find_spec(pkg) for pkg in ["geopandas"]]

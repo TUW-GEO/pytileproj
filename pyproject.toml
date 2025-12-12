@@ -30,6 +30,7 @@ Repository = "https://github.com/TUW-GEO/pytileproj"
 
 [project.optional-dependencies]
 vis = ["matplotlib", "cartopy"]
+geo = ["geopandas"]
 docs = ["sphinx", "sphinx-book-theme", "sphinx-autodoc2", "myst-nb"]
 
 [build-system]

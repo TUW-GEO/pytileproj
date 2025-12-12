@@ -40,7 +40,7 @@ from morecantile.models import Tile as RegularTile
 from morecantile.models import TileMatrixSet
 from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
 
-from pytileproj._const import JSON_INDENT, VIS_INSTALLED
+from pytileproj._const import GEO_INSTALLED, JSON_INDENT, VIS_INSTALLED
 from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj.projgeom import (
     ProjCoord,
@@ -61,6 +61,9 @@ if VIS_INSTALLED:
     import matplotlib.axes as mplax
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as PolygonPatch
+
+if GEO_INSTALLED:
+    from geopandas import GeoDataFrame
 
 AnyTile = RegularTile | IrregularTile
 TileGenerator = Generator[AnyTile, AnyTile, AnyTile]
@@ -83,26 +86,13 @@ def _tiling_access(f: callable) -> callable:
     def wrapper(self: "TilingSystem", *args: tuple, **kwargs: dict) -> Any:  # noqa: ANN401
         use_args = f.__name__ == "__getitem__"
         tiling_id = args[0] if use_args else kwargs.get("tiling_id")
+        tiling_level = self.tiling_id_to_level(tiling_id)
 
-        tiling_id_mod = None
-        if tiling_id is None:
-            tiling_id_mod = self.tiling_levels[0]
-        elif isinstance(tiling_id, int):
-            tiling_id_mod = tiling_id
-        elif isinstance(tiling_id, str):
-            tiling_id_mod = self._tilings_map[tiling_id]
-        else:
-            err_msg = (
-                "The given tiling identifier has "
-                f"the wrong data type ({type(tiling_id)})"
-                ". Only an integer or string is supported."
-            )
-            raise TypeError(err_msg)
         if use_args:
             args = list(args)
-            args[0] = tiling_id_mod
+            args[0] = tiling_level
         else:
-            kwargs["tiling_id"] = tiling_id_mod
+            kwargs["tiling_id"] = tiling_level
 
         return f(self, *args, **kwargs)
 
@@ -359,13 +349,14 @@ class TilingSystem(BaseModel):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
-    def tiling_name_to_level(self, name: str) -> int:
+    def tiling_id_to_level(self, tiling_id: str | int | None) -> int:
         """Convert tiling name to level.
 
         Parameters
         ----------
-        name: str
-            Tiling name.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -373,7 +364,21 @@ class TilingSystem(BaseModel):
             Tiling level.
 
         """
-        return self._tilings_map[name]
+        if tiling_id is None:
+            tiling_level = self.tiling_levels[0]
+        elif isinstance(tiling_id, int):
+            tiling_level = tiling_id
+        elif isinstance(tiling_id, str):
+            tiling_level = self._tilings_map[tiling_id]
+        else:
+            err_msg = (
+                "The given tiling identifier has "
+                f"the wrong data type ({type(tiling_id)})"
+                ". Only an integer or string is supported."
+            )
+            raise TypeError(err_msg)
+
+        return tiling_level
 
     @property
     def tiling_levels(self) -> list[int]:
@@ -853,6 +858,90 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         arg = geom.boundary if isinstance(geom, RasterTile) else geom
 
         return super().__contains__(arg)
+
+    def to_geodataframe(
+        self,
+        tiling_ids: list[str | int] | None = None,
+        exclude: list[str] | None = None,
+    ) -> GeoDataFrame:
+        """Create a geodataframe from all tiles within the system.
+
+        Parameters
+        ----------
+        tiling_ids: list[str | int] | None, optional
+            List of tiling levels or names.
+            Defaults to all tiling levels.
+        exclude: list[str] | None, optional
+            Exclude raster tile object attributes.
+            Excludes the 'crs' attribute by default.
+
+        Returns
+        -------
+        GeoDataFrame
+            Dataframe where each row contains a representation of a raster tile.
+
+        """
+        tiling_levels = (
+            self.tiling_levels
+            if tiling_ids is None
+            else [self.tiling_id_to_level(tiling_id) for tiling_id in tiling_ids]
+        )
+        exclude_attrs = ["crs"]
+        if exclude is not None:
+            exclude_attrs = list(set(exclude_attrs + exclude_attrs))
+
+        tiling_attrs = ["name", "tiling_level"]
+        tiling_attrs_rnmd = ["tiling_name", "tiling_level"]
+
+        rtiles = []
+        for tiling_level in tiling_levels:
+            tiling_dict = {}
+            for i in range(len(tiling_attrs)):
+                tiling_dict[tiling_attrs_rnmd[i]] = getattr(
+                    self[tiling_level], tiling_attrs[i]
+                )
+
+            for tile in self[tiling_level]:
+                tilename = self._tile_to_name(tile)
+                rtile = self._tile_to_raster_tile(tile, tilename)
+                if not self._tile_in_zone(rtile):
+                    continue
+                rtile_dict = rtile.model_dump(exclude=exclude_attrs)
+                rtile_dict.update(tiling_dict)
+                rtile_dict["geometry"] = rtile.boundary_shapely
+                rtiles.append(rtile_dict)
+
+        return GeoDataFrame(rtiles, crs=self.pyproj_crs)
+
+    def to_shapefile(
+        self,
+        shp_path: Path,
+        tiling_ids: list[str | int] | None = None,
+        exclude: list[str] | None = None,
+    ) -> None:
+        """Write class attributes to a JSON file.
+
+        Parameters
+        ----------
+        shp_path: Path
+            Path to JSON file.
+        tiling_ids: list[str | int] | None, optional
+            List of tiling levels or names.
+            Defaults to all tiling levels.
+        exclude: list[str] | None, optional
+            Exclude raster tile object attributes.
+            Excludes the 'crs' attribute by default.
+
+        """
+        tiling_levels = (
+            self.tiling_levels
+            if tiling_ids is None
+            else [self.tiling_id_to_level(tiling_id) for tiling_id in tiling_ids]
+        )
+        for tiling_level in tiling_levels:
+            layer_name = self[tiling_level].name
+            shp_layer_path = shp_path.parent / f"{shp_path.stem}_{layer_name}.shp"
+            self.to_geodataframe([tiling_level], exclude).to_file(shp_layer_path)
 
 
 def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
