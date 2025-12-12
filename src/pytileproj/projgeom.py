@@ -31,14 +31,16 @@
 import json
 import warnings
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Annotated, Any, NamedTuple
 
 import numpy as np
 import pyproj
 import requests
 import shapely
+import shapely.wkt as swkt
 from antimeridian import fix_multi_polygon, fix_polygon
 from PIL import Image, ImageDraw
+from pydantic import AfterValidator, BaseModel, model_serializer
 from shapely.geometry import MultiPolygon, Polygon
 
 from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM, TIMEOUT, VIS_INSTALLED
@@ -69,11 +71,24 @@ class ProjCoord(NamedTuple):
     crs: pyproj.CRS
 
 
-class ProjGeom(NamedTuple):
+def convert_geom(arg: str | shapely.Geometry) -> shapely.Geometry:
+    return swkt.loads(arg) if isinstance(arg, str) else arg
+
+
+def convert_crs(arg: Any) -> pyproj.CRS:  # noqa: ANN401
+    return pyproj.CRS.from_user_input(arg)
+
+
+class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     """Define a geometry in a certain projection."""
 
-    geom: shapely.Geometry
-    crs: pyproj.CRS
+    geom: Annotated[str | shapely.Geometry, AfterValidator(convert_geom)]
+    crs: Annotated[Any, AfterValidator(convert_crs)]
+
+    @model_serializer
+    def serialize(self) -> dict:
+        """Serialise/encode class variables."""
+        return {"geom": self.geom.wkt, "crs": self.crs.to_proj4()}
 
 
 def fetch_proj_zone(epsg: int) -> ProjGeom | None:
@@ -121,7 +136,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom | None:
                 else:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
-                zone_geom = ProjGeom(zone_geom, pyproj.CRS.from_epsg(4326))
+                zone_geom = ProjGeom(geom=zone_geom, crs=pyproj.CRS.from_epsg(4326))
 
     return zone_geom
 
@@ -626,8 +641,7 @@ def convert_any_to_geog_geom(
     """
     if isinstance(arg, Path):
         with arg.open() as f:
-            geojson = json.load(f)
-        geom = shapely.from_geojson(geojson)
+            geom = shapely.from_geojson(f.read())
         proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
     elif isinstance(arg, shapely.Geometry):
         proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))

@@ -30,7 +30,7 @@ def ref_boundary(ref_extent: tuple) -> ProjGeom:
     ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
     sh_geom = Polygon(ref_points)
 
-    return ProjGeom(sh_geom, pyproj.CRS.from_epsg(4326))
+    return ProjGeom(geom=sh_geom, crs=pyproj.CRS.from_epsg(4326))
 
 
 @pytest.fixture(scope="session")

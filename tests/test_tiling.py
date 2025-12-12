@@ -47,7 +47,7 @@ def test_iter_reg_tiles(reg_grid: RegularTiling):
 
 
 def test_to_ogc(reg_grid: RegularTiling):
-    ogc_grid_dict = reg_grid.to_ogc_repr()
+    ogc_grid_dict = reg_grid.to_ogc_standard()
     assert ogc_grid_dict == {
         "title": "grid",
         "description": None,

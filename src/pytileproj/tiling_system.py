@@ -79,23 +79,52 @@ __all__ = [
 ]
 
 
+def _tiling_access(f: callable) -> callable:
+    def wrapper(self: "TilingSystem", *args: tuple, **kwargs: dict) -> Any:  # noqa: ANN401
+        use_args = f.__name__ == "__getitem__"
+        tiling_id = args[0] if use_args else kwargs.get("tiling_id")
+
+        tiling_id_mod = None
+        if tiling_id is None:
+            tiling_id_mod = self.tiling_levels[0]
+        elif isinstance(tiling_id, int):
+            tiling_id_mod = tiling_id
+        elif isinstance(tiling_id, str):
+            tiling_id_mod = self._tilings_map[tiling_id]
+        else:
+            err_msg = (
+                "The given tiling identifier has "
+                f"the wrong data type ({type(tiling_id)})"
+                ". Only an integer or string is supported."
+            )
+            raise TypeError(err_msg)
+        if use_args:
+            args = list(args)
+            args[0] = tiling_id_mod
+        else:
+            kwargs["tiling_id"] = tiling_id_mod
+
+        return f(self, *args, **kwargs)
+
+    return wrapper
+
+
 class ProjSystem(BaseModel, arbitrary_types_allowed=True):
-    """Base class defining a projection represented by an EPSG code and a zone."""
+    """Class defining a projection represented by an EPSG code and a zone."""
 
     crs: Any
-    proi_zone_geog: Annotated[
+    proj_zone_geog: Annotated[
         Path | shapely.Geometry | ProjGeom | None,
         AfterValidator(convert_any_to_geog_geom),
     ] = None
 
-    _proj_zone_geog: ProjGeom
     _proj_zone: ProjGeom
     _to_geog: pyproj.Transformer
     _from_geog: pyproj.Transformer
     _crs: pyproj.CRS
 
     def __init__(self, **kwargs: dict[str, Any]) -> None:
-        """Initialise projected system base object."""
+        """Initialise projection system object."""
         super().__init__(**kwargs)
         self._crs = pyproj.CRS.from_user_input(self.crs)
         geog_crs = pyproj.CRS(4326)
@@ -103,13 +132,13 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         self._from_geog = pyproj.Transformer.from_crs(
             geog_crs, self._crs, always_xy=True
         )
-        self._proj_zone_geog = self.proi_zone_geog or fetch_proj_zone(
+        self.proj_zone_geog = self.proj_zone_geog or fetch_proj_zone(
             self._crs.to_epsg()
         )
-        proj_zone_faulty = transform_geometry(self._proj_zone_geog, self.crs)
+        proj_zone_faulty = transform_geometry(self.proj_zone_geog, self.crs)
         # buffer of 0 removes wrap-arounds along the anti-meridian
         proj_zone = shapely.buffer(proj_zone_faulty.geom, 0)
-        self._proj_zone = ProjGeom(proj_zone, self._crs)
+        self._proj_zone = ProjGeom(geom=proj_zone, crs=self._crs)
 
     def _lonlat_inside_proj(self, lon: float, lat: float) -> bool:
         """Check if a longitude and latitude coordinate is within the projection zone.
@@ -205,7 +234,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
             Output path (.geojson)
 
         """
-        geojson = self._proj_zone_geog.geom.wkt
+        geojson = shapely.to_geojson(self.proj_zone_geog.geom)
         with path.open("w") as f:
             f.writelines(geojson)
 
@@ -224,7 +253,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
 
         """
         if isinstance(other, ProjCoord):
-            other = ProjGeom(shapely.Point((other.x, other.y)), other.crs)
+            other = ProjGeom(geom=shapely.Point((other.x, other.y)), crs=other.crs)
 
         geog_sref = pyproj.CRS.from_epsg(4326)
         if not geog_sref.is_exact_same(other.crs):
@@ -232,7 +261,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         else:
             wrpd_geom = other
 
-        return shapely.within(wrpd_geom.geom, self._proj_zone_geog.geom)
+        return shapely.within(wrpd_geom.geom, self.proj_zone_geog.geom)
 
 
 def validate_samplings(
@@ -272,11 +301,20 @@ def validate_samplings(
 
 
 class TilingSystem(BaseModel):
-    """Base class defining a multi-level tiling system."""
+    """Class defining a multi-level tiling system."""
 
     name: str
     tilings: dict[int, RegularTiling | IrregularTiling]
     allowed_samplings: dict[int, list[int | float]] | None = None
+
+    _tilings_map: dict
+
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
+        """Initialise tiling system object."""
+        super().__init__(**kwargs)
+        self._tilings_map = {
+            tiling.name: level for level, tiling in self.tilings.items()
+        }
 
     @model_validator(mode="after")
     def check_samplings(self) -> "TilingSystem":
@@ -321,6 +359,22 @@ class TilingSystem(BaseModel):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
+    def tiling_name_to_level(self, name: str) -> int:
+        """Convert tiling name to level.
+
+        Parameters
+        ----------
+        name: str
+            Tiling name.
+
+        Returns
+        -------
+        int:
+            Tiling level.
+
+        """
+        return self._tilings_map[name]
+
     @property
     def tiling_levels(self) -> list[int]:
         """Return tiling levels."""
@@ -347,13 +401,14 @@ class TilingSystem(BaseModel):
         """Return number of tiling levels."""
         return len(self.tilings)
 
-    def __getitem__(self, tiling_level: int) -> RegularTiling:
+    @_tiling_access
+    def __getitem__(self, tiling_id: int | str) -> RegularTiling:
         """Return the tiling at a specific tiling level.
 
         Parameter
         ---------
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str
+            Tiling ID representing a tiling level or tiling name.
 
         Returns
         -------
@@ -361,14 +416,14 @@ class TilingSystem(BaseModel):
             Tiling object at a specific tiling level.
 
         """
-        return self.tilings[tiling_level]
+        return self.tilings[tiling_id]
 
 
 class ProjTilingSystem(TilingSystem, ProjSystem):
     """Base class defining a projected, multi-level tiling system."""
 
     def get_tile_from_lonlat(
-        self, lon: float, lat: float, tiling_level: int
+        self, lon: float, lat: float, tiling_id: int | str | None = None
     ) -> RasterTile:
         """Get a raster tile object from geographic coordinates.
 
@@ -378,8 +433,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Longitude.
         lat: float
             Latitude.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -387,10 +443,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Raster tile object.
 
         """
-        geog_coord = ProjCoord(lon, lat, 4326)
-        return self.get_tile_from_coord(geog_coord, tiling_level)
+        geog_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
+        return self.get_tile_from_coord(geog_coord, tiling_id=tiling_id)
 
-    def get_tile_from_xy(self, x: float, y: float, tiling_level: int) -> RasterTile:
+    def get_tile_from_xy(
+        self, x: float, y: float, tiling_id: int | str | None = None
+    ) -> RasterTile:
         """Get a raster tile object from projected coordinates.
 
         Parameters
@@ -399,8 +457,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             World system coordinate in X direction.
         y: float
             World system coordinate in Y direction.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -408,18 +467,21 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Raster tile object.
 
         """
-        proj_coord = ProjCoord(x, y, self.epsg)
-        return self.get_tile_from_coord(proj_coord, tiling_level)
+        proj_coord = ProjCoord(x, y, self.pyproj_crs)
+        return self.get_tile_from_coord(proj_coord, tiling_id=tiling_id)
 
-    def get_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+    def get_tile_from_coord(
+        self, coord: ProjCoord, tiling_id: int | str | None = None
+    ) -> RasterTile:
         """Get a raster tile object from projected coordinates.
 
         Parameters
         ----------
         coord: ProjCoord
             Projected coordinates object.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -497,7 +559,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         return shapely.intersects(tile.boundary.geom, self._proj_zone.geom)
 
     def _get_tiles_in_geog_bbox(
-        self, bbox: tuple[float, float, float, float], tiling_level: int
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int | str | None = None,
     ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
 
@@ -505,8 +569,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -568,11 +633,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         return mask
 
+    @_tiling_access
     def plot(  # noqa: C901, PLR0913
         self,
         *,
         ax: Union["mplax.Axes", None] = None,
-        tiling_level: int = 0,
+        tiling_id: int | str | None = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
         edgewidth: int = 1,
@@ -592,8 +658,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         ----------
         ax : matplotlib.pyplot.axes
             Pre-defined Matplotlib axis.
-        tiling_level: int, optional
-            Tiling level or zoom. Defaults to 0.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
         facecolor : str, optional
             Color code as described at:
               https://matplotlib.org/3.1.0/tutorials/colors/colors.html.
@@ -662,7 +729,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             ax.coastlines()
             ax.add_feature(cartopy.feature.BORDERS)
 
-        for tile in self[tiling_level]:
+        for tile in self[tiling_id]:
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, tilename)
             if self._tile_in_zone(raster_tile):
@@ -737,7 +804,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         return ax
 
     def get_tiles_in_geog_bbox(
-        self, bbox: tuple[float, float, float, float], tiling_level: int
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int | str | None = None,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -745,8 +814,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -995,13 +1065,15 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         return is_congruent
 
-    def n_tiles_x(self, tiling_level: int) -> int:
+    @_tiling_access
+    def n_tiles_x(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles in X direction at the given tiling.
 
         Parameters
         ----------
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1009,15 +1081,17 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Number of tiles in X direction.
 
         """
-        return self[tiling_level].tm.matrixWidth
+        return self[tiling_id].tm.matrixWidth
 
-    def n_tiles_y(self, tiling_level: int) -> int:
+    @_tiling_access
+    def n_tiles_y(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles in Y direction at the given tiling.
 
         Parameters
         ----------
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1025,15 +1099,17 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Number of tiles in Y direction.
 
         """
-        return self[tiling_level].tm.matrixHeight
+        return self[tiling_id].tm.matrixHeight
 
-    def n_tiles(self, tiling_level: int) -> int:
+    @_tiling_access
+    def n_tiles(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles at the given tiling.
 
         Parameters
         ----------
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1041,7 +1117,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Number of tiles.
 
         """
-        return self.n_tiles_x(tiling_level) * self.n_tiles_y(tiling_level)
+        return self.n_tiles_x(tiling_id) * self.n_tiles_y(tiling_id)
 
     @classmethod
     def default(
@@ -1162,15 +1238,19 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         return raster_tile
 
-    def get_tile_from_coord(self, coord: ProjCoord, tiling_level: int) -> RasterTile:
+    @_tiling_access
+    def get_tile_from_coord(
+        self, coord: ProjCoord, tiling_id: int | str | None = None
+    ) -> RasterTile:
         """Get a raster tile object from projected coordinates.
 
         Parameters
         ----------
         coord: ProjCoord
             Projected coordinates object.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1181,7 +1261,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         tile = self._tms.tile(
             coord.x,
             coord.y,
-            tiling_level,
+            tiling_id,
             geographic_crs=coord.crs,
         )
         tilename = self._tile_to_name(tile)
@@ -1230,8 +1310,11 @@ class RegularProjTilingSystem(ProjTilingSystem):
         min_x, min_y, max_x, max_y = bbox
         return self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
 
+    @_tiling_access
     def get_tiles_in_geog_bbox(
-        self, bbox: tuple[float, float, float, float], tiling_level: int
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int | str | None = None,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -1239,8 +1322,9 @@ class RegularProjTilingSystem(ProjTilingSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1249,13 +1333,23 @@ class RegularProjTilingSystem(ProjTilingSystem):
             bounding box.
 
         """
-        for tile in self._get_tiles_in_geog_bbox(bbox, tiling_level):
+        for tile in self._get_tiles_in_geog_bbox(bbox, tiling_id):
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, name=tilename)
             if not self._tile_in_zone(raster_tile):
                 continue
 
             yield raster_tile
+
+    def to_ogc_standard(self) -> dict:
+        """OGC representation of the tiling system."""
+        return self._tms.model_dump()
+
+    def to_ogc_json(self, json_path: Path) -> None:
+        """Write OGC representation of the tiling system to a JSON file."""
+        grid_def = json.dumps(self.to_ogc_standard(), indent=JSON_INDENT)
+        with json_path.open("w") as f:
+            f.writelines(grid_def)
 
 
 class IrregularProjTilingSystem(ProjTilingSystem):
@@ -1297,9 +1391,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         """
         tile = self._get_tile(tilename)
         raster_tile = self._tile_to_raster_tile(tile, name=tilename)
-        if self.tiles_in_zone_only and not shapely.intersects(
-            raster_tile.boundary.geom, self._proj_zone.geom
-        ):
+        if not shapely.intersects(raster_tile.boundary.geom, self._proj_zone.geom):
             raster_tile = None
 
         return raster_tile
@@ -1326,8 +1418,11 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
+    @_tiling_access
     def get_tiles_in_geog_bbox(
-        self, bbox: tuple[float, float, float, float], tiling_level: int
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int | str | None = None,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -1335,8 +1430,9 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_level: int
-            Tiling level or zoom.
+        tiling_id: int | str | None
+            Tiling level or name.
+            Defaults to the first tiling level.
 
         Returns
         -------
@@ -1344,11 +1440,9 @@ class IrregularProjTilingSystem(ProjTilingSystem):
             Yields raster tile after tile, which intersects with the given bounding box.
 
         """
-        for tile in self[tiling_level].tiles_in_bbox(bbox):
+        for tile in self[tiling_id].tiles_in_bbox(bbox):
             raster_tile = self._tile_to_raster_tile(tile, name=tile.id)
-            if self.tiles_in_zone_only and not shapely.intersects(
-                raster_tile.boundary.geom, self._proj_zone.geom
-            ):
+            if not shapely.intersects(raster_tile.boundary.geom, self._proj_zone.geom):
                 continue
 
             yield raster_tile

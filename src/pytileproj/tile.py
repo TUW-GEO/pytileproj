@@ -823,7 +823,7 @@ class RasterTile(BaseModel):
     def __proj_geom_boundary(self) -> ProjGeom:
         """Outer boundary of the raster tile as a projected geometry."""
         boundary = Polygon(self.outer_boundary_corners)
-        return ProjGeom(boundary, self.crs)
+        return ProjGeom(geom=boundary, crs=self.crs)
 
     @_align_geom()
     def __contains__(self, other: Union[ProjGeom, "RasterTile"]) -> bool:

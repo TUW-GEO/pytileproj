@@ -97,8 +97,8 @@ def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling
     gsb.to_file(json_path)
     gsb2 = TilingSystem.from_file(json_path)
 
-    assert gsb[0].to_ogc_repr() == gsb2[0].to_ogc_repr()
-    assert gsb[1].to_ogc_repr() == gsb2[1].to_ogc_repr()
+    assert gsb[0].to_ogc_standard() == gsb2[0].to_ogc_standard()
+    assert gsb[1].to_ogc_standard() == gsb2[1].to_ogc_standard()
 
     json_path.unlink()
 
@@ -227,7 +227,7 @@ def test_proj_zone_geog_io():
     e7eu = ProjSystem(crs=27704, proj_zone_geog=json_path)
     json_path.unlink()
 
-    assert e7eu._proj_zone_geog.geom.wkt == e7eu_ref._proj_zone_geog.geom.wkt  # noqa: SLF001
+    assert e7eu.proj_zone_geog.geom.wkt == e7eu_ref.proj_zone_geog.geom.wkt
 
 
 if __name__ == "__main__":

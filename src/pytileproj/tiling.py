@@ -131,7 +131,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
             for y in range(self._tm.matrixHeight):
                 yield RegularTile(x, y, self.tiling_level)
 
-    def to_ogc_repr(self) -> dict:
+    def to_ogc_standard(self) -> dict:
         """OGC representation of the tiling."""
         return self._tm.model_dump()
 
