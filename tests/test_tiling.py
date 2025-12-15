@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from pydantic_core import ValidationError
 
 from pytileproj.tile import IrregularTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
@@ -8,7 +9,7 @@ from pytileproj.tiling import IrregularTiling, RegularTiling
 @pytest.fixture(scope="module")
 def reg_grid():
     return RegularTiling(
-        name="grid", extent=[0, 0, 180, 90], sampling=1, tile_shape_px=(10, 10)
+        name="grid", extent=[0, 0, 180, 90], sampling=1, tile_shape=(10, 10)
     )
 
 
@@ -95,6 +96,58 @@ def test_iter_irreg_tiles(irreg_grid: IrregularTiling):
 def test_irreg_tiles_bbox(irreg_grid: IrregularTiling):
     tiles = irreg_grid.tiles_intersecting_bbox([-10, -10, 10, 10])
     assert sorted([tile.id for tile in tiles]) == ["1", "2", "3"]
+
+
+def test_allowed_samplings():
+    tile_size = 3000
+    assert RegularTiling.allowed_samplings(tile_size) == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        20,
+        24,
+        25,
+        30,
+        40,
+        50,
+        60,
+        75,
+        100,
+        120,
+        125,
+        150,
+        200,
+        250,
+        300,
+        375,
+        500,
+        600,
+        750,
+        1000,
+        1500,
+        3000,
+    ]
+
+
+def test_validate_sampling():
+    _ = RegularTiling(
+        name="grid", extent=[0, 0, 180, 90], sampling=5, tile_shape=(10, 10)
+    )
+
+    try:
+        _ = RegularTiling(
+            name="grid", extent=[0, 0, 180, 90], sampling=3, tile_shape=(10, 10)
+        )
+        raise AssertionError
+    except ValidationError:
+        assert True
 
 
 if __name__ == "__main__":

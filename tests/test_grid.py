@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from pydantic_core import ValidationError
 
 from pytileproj.grid import RegularGrid
 from pytileproj.tiling import RegularTiling
@@ -14,14 +13,14 @@ from pytileproj.tiling_system import (
 
 @pytest.fixture(scope="module")
 def tiling_defs():
-    return {1: RegularTilingDefinition(name="t1", tile_size=100_000)}
+    return {1: RegularTilingDefinition(name="t1", tile_shape=(100_000, 100_000))}
 
 
 @pytest.fixture(scope="module")
 def tiling_defs_multi():
     return {
-        1: RegularTilingDefinition(name="t1", tile_size=100_000),
-        2: RegularTilingDefinition(name="t2", tile_size=200_000),
+        1: RegularTilingDefinition(name="t1", tile_shape=(100_000, 100_000)),
+        2: RegularTilingDefinition(name="t2", tile_shape=(200_000, 200_000)),
     }
 
 
@@ -49,7 +48,7 @@ def e7eu_grid_t1():
         name="t1",
         extent=[0, 0, 8_660_000, 6_020_000],
         sampling=10,
-        tile_shape_px=(10_000, 10_000),
+        tile_shape=(100_000, 100_000),
         tiling_level=1,
         axis_orientation=["E", "S"],
     )
@@ -61,7 +60,7 @@ def e7af_grid_t1():
         name="t1",
         extent=[0, 0, 12_000_000, 9_600_000],
         sampling=10,
-        tile_shape_px=(10_000, 10_000),
+        tile_shape=(100_000, 100_000),
         tiling_level=1,
         axis_orientation=["E", "S"],
     )
@@ -126,7 +125,6 @@ def test_tiling_defs_multi(
 
     assert e7grid_from_def._proj_defs == e7grid_to_def._proj_defs  # noqa: SLF001
     assert e7grid_from_def._tiling_defs == e7grid_to_def._tiling_defs  # noqa: SLF001
-    assert e7grid_from_def._allowed_samplings == e7grid_to_def._allowed_samplings  # noqa: SLF001
 
 
 def test_tiling_defs_multi_sampling_diff(
@@ -143,25 +141,6 @@ def test_tiling_defs_multi_sampling_diff(
     e7grid = RegularGrid.from_sampling(1000, rpts_defs, tiling_defs_multi)
 
     assert e7grid_from_def.model_dump() == e7grid.model_dump()
-
-
-def test_tiling_defs_multi_allwd_wrng_smpl(
-    rpts_defs: dict[str, RegularTilingDefinition],
-    tiling_defs_multi: dict[int, RegularTilingDefinition],
-):
-    e7grid_to_def = RegularGrid.from_sampling(
-        10, rpts_defs, tiling_defs_multi, allowed_samplings={1: [10]}
-    )
-    json_path = Path("test_tiling_defs_multi_allwd_wrng_smpl.json")
-    e7grid_to_def.to_grid_def(json_path)
-
-    try:
-        _ = RegularGrid.from_grid_def(json_path, 100)
-        raise AssertionError
-    except ValidationError:
-        assert True
-
-    json_path.unlink()
 
 
 def test_tiling_defs_multi_mismatch(

@@ -35,6 +35,7 @@ from typing import Any
 from pydantic import BaseModel, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
+from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
     ProjSystemDefinition,
     RegularProjTilingSystem,
@@ -54,7 +55,6 @@ class RegularGrid(BaseModel, extra="allow"):
 
     _proj_defs: dict[int, ProjSystemDefinition] | None = None
     _tiling_defs: dict[int, RegularTilingDefinition] | None = None
-    _allowed_samplings: dict[int, list[float | int]] | None = None
 
     _rpts_cls = RegularProjTilingSystem
 
@@ -67,8 +67,6 @@ class RegularGrid(BaseModel, extra="allow"):
         proj_def: ProjSystemDefinition,
         sampling: float | dict[int, float | int],
         tiling_defs: dict[int, RegularTilingDefinition],
-        *,
-        allowed_samplings: dict[int, list[float | int]] | None = None,
     ) -> RegularProjTilingSystem:
         """Create regular projected tiling system from grid definitions.
 
@@ -85,10 +83,6 @@ class RegularGrid(BaseModel, extra="allow"):
             tiling levels as keys and samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        allowed_samplings: Dict[int, List[float | int]] | None, optional
-            Dictionary with tiling levels as keys and allowed samplings as values.
-            Defaults to None, which means there are no restrictions for the specified
-            sampling.
 
         Returns
         -------
@@ -100,8 +94,24 @@ class RegularGrid(BaseModel, extra="allow"):
             sampling,
             proj_def,
             tiling_defs,
-            allowed_samplings=allowed_samplings,
         )
+
+    @staticmethod
+    def allowed_samplings(tile_size: float) -> list[float]:
+        """Compute samplings which fit into the given tile size.
+
+        Parameters
+        ----------
+        tile_size: float
+            Tile size.
+
+        Returns
+        -------
+        list[float]
+            Divisors/samplings of the given tile size.
+
+        """
+        return RegularTiling.allowed_samplings(tile_size)
 
     @classmethod
     def from_sampling(
@@ -109,8 +119,6 @@ class RegularGrid(BaseModel, extra="allow"):
         sampling: float | dict[int, float | int],
         proj_defs: dict[str, ProjSystemDefinition],
         tiling_defs: dict[int, RegularTilingDefinition],
-        *,
-        allowed_samplings: dict[int, list[float | int]] | None = None,
     ) -> "RegularGrid":
         """Create a regular grid from grid definitions.
 
@@ -127,10 +135,6 @@ class RegularGrid(BaseModel, extra="allow"):
             and axis orientation).
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        allowed_samplings: Dict[int, List[float | int]] | None, optional
-            Dictionary with tiling levels as keys and allowed samplings as values.
-            Defaults to None, which means there are no restrictions for the
-            specified sampling.
 
         Returns
         -------
@@ -144,13 +148,11 @@ class RegularGrid(BaseModel, extra="allow"):
                 rpts_def,
                 sampling,
                 tiling_defs,
-                allowed_samplings=allowed_samplings,
             )
 
         rgrid = cls(**tiling_systems)
         rgrid._proj_defs = proj_defs
         rgrid._tiling_defs = tiling_defs
-        rgrid._allowed_samplings = allowed_samplings
 
         return rgrid
 
@@ -188,15 +190,11 @@ class RegularGrid(BaseModel, extra="allow"):
             int(name): RegularTilingDefinition(**rpts_def)
             for name, rpts_def in grid_def["tiling_defs"].items()
         }
-        allowed_samplings = grid_def["allowed_samplings"]
-        if allowed_samplings is not None:
-            allowed_samplings = {int(k): v for k, v in allowed_samplings.items()}
 
         return cls.from_sampling(
             sampling=sampling,
             proj_defs=rpts_defs,
             tiling_defs=tiling_defs,
-            allowed_samplings=allowed_samplings,
         )
 
     def _fetch_mod_grid_def(
@@ -218,18 +216,15 @@ class RegularGrid(BaseModel, extra="allow"):
             and axis orientation).
         Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        Dict[int, List[float | int]]
-            Dictionary with tiling levels as keys and allowed samplings as values.
 
         Notes
         -----
         The returned tiling definitions will only represent the tiling levels, which fit
-        to the allowed samplings and the sampling of the current regular grid instance.
+        to the sampling of the current regular grid instance.
 
         """
         rpts_defs = {}
         tiling_defs = {}
-        allowed_samplings = {}
         ref_tiling_level = None
         rtps_names = list(self.model_dump().keys())
         for name in rtps_names:
@@ -237,15 +232,11 @@ class RegularGrid(BaseModel, extra="allow"):
             if ref_tiling_level is None:
                 ref_tiling_level = rpts.tiling_levels[0]
                 for tiling_level in rpts.tiling_levels:
-                    tile_size = (
-                        rpts[tiling_level].sampling
-                        * rpts[tiling_level].tile_shape_px[0]
-                    )
+                    tile_shape = rpts[tiling_level].tile_shape
                     tiling_def = RegularTilingDefinition(
-                        name=rpts[tiling_level].name, tile_size=tile_size
+                        name=rpts[tiling_level].name, tile_shape=tile_shape
                     ).model_dump()
                     tiling_defs[tiling_level] = tiling_def
-                allowed_samplings = rpts.allowed_samplings
             rpts_defs[name] = ProjSystemDefinition(
                 name=name,
                 crs=rpts.crs,
@@ -253,7 +244,7 @@ class RegularGrid(BaseModel, extra="allow"):
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
             ).model_dump()
 
-        return rpts_defs, tiling_defs, allowed_samplings
+        return rpts_defs, tiling_defs
 
     def _fetch_ori_grid_def(
         self,
@@ -275,14 +266,12 @@ class RegularGrid(BaseModel, extra="allow"):
             and axis orientation).
         Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        Dict[int, List[float | int]]
-            Dictionary with tiling levels as keys and allowed samplings as values.
 
         """
         rpts_def = {k: v.model_dump() for k, v in self._proj_defs.items()}
         tilings_def = {k: v.model_dump() for k, v in self._tiling_defs.items()}
 
-        return rpts_def, tilings_def, self._allowed_samplings
+        return rpts_def, tilings_def
 
     def to_grid_def(self, json_path: Path) -> None:
         """Write the regular grid definition to a JSON file.
@@ -294,14 +283,13 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         if not self._proj_defs:
-            proj_defs, tiling_defs, allowed_samplings = self._fetch_mod_grid_def()
+            proj_defs, tiling_defs = self._fetch_mod_grid_def()
         else:
-            proj_defs, tiling_defs, allowed_samplings = self._fetch_ori_grid_def()
+            proj_defs, tiling_defs = self._fetch_ori_grid_def()
 
         grid_def = {}
         grid_def["proj_defs"] = proj_defs
         grid_def["tiling_defs"] = tiling_defs
-        grid_def["allowed_samplings"] = allowed_samplings
         grid_def = json.dumps(grid_def, indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(grid_def)

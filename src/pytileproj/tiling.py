@@ -36,7 +36,7 @@ import numpy as np
 import shapely
 from morecantile.models import Tile as RegularTile
 from morecantile.models import TileMatrix
-from pydantic import AfterValidator, BaseModel, NonNegativeFloat, NonNegativeInt
+from pydantic import AfterValidator, BaseModel, NonNegativeFloat, model_validator
 from shapely.geometry import Polygon
 
 from pytileproj.tile import IrregularTile
@@ -57,7 +57,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     name: str
     extent: tuple[float, float, float, float]
     sampling: NonNegativeFloat
-    tile_shape_px: tuple[NonNegativeInt, NonNegativeInt]
+    tile_shape: tuple[NonNegativeFloat, NonNegativeFloat]
     tiling_level: int | None = 0
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
 
@@ -67,11 +67,15 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         """Initialise regular tiling object."""
         super().__init__(**kwargs)
 
+        tile_width, tile_height = (
+            int(self.tile_shape[0] / self.sampling),
+            int(self.tile_shape[1] / self.sampling),
+        )
         matrix_width = int(
-            (self.extent[2] - self.extent[0]) / (self.tile_shape_px[0] * self.sampling)
+            np.ceil((self.extent[2] - self.extent[0]) / self.tile_shape[0])
         )
         matrix_height = int(
-            (self.extent[3] - self.extent[1]) / (self.tile_shape_px[1] * self.sampling)
+            np.ceil((self.extent[3] - self.extent[1]) / self.tile_shape[1])
         )
 
         self._tm = TileMatrix(
@@ -79,13 +83,34 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
             cellSize=self.sampling,
             cornerOfOrigin=self.corner_of_origin,
             pointOfOrigin=self.origin_xy,
-            tileWidth=self.tile_shape_px[0],
-            tileHeight=self.tile_shape_px[1],
+            tileWidth=tile_width,
+            tileHeight=tile_height,
             matrixWidth=matrix_width,
             matrixHeight=matrix_height,
             id=str(self.tiling_level),
             title=self.name,
         )
+
+    @model_validator(mode="after")
+    def validate_sampling(self) -> "RegularTiling":
+        """Check if sampling is a divisor of the tile shape."""
+        err_msg = (
+            "Tiling {}'s sampling {} is not allowed."
+            " The following samplings are allowed: {} and {}"
+        )
+        width_okay = self.tile_shape[0] % self.sampling == 0
+        height_okay = self.tile_shape[1] % self.sampling == 0
+        if not (width_okay and height_okay):
+            raise ValueError(
+                err_msg.format(
+                    self.name,
+                    self.sampling,
+                    RegularTiling.allowed_samplings(self.tile_shape[0]),
+                    RegularTiling.allowed_samplings(self.tile_shape[1]),
+                )
+            )
+
+        return self
 
     @property
     def corner_of_origin(self) -> CornerOfOrigin:
@@ -124,6 +149,30 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     def tm(self) -> TileMatrix:
         """Morecantile's TileMatrix instance."""
         return self._tm
+
+    @staticmethod
+    def allowed_samplings(tile_size: float) -> list[float]:
+        """Compute samplings which fit into the given tile size.
+
+        Parameters
+        ----------
+        tile_size: float
+            Tile size.
+
+        Returns
+        -------
+        list[float]
+            Divisors/samplings of the given tile size.
+
+        """
+        samplings = []
+        for i in range(1, int(np.sqrt(tile_size)) + 1):
+            if tile_size % i == 0:
+                samplings.append(i)
+                if i != tile_size // i:
+                    samplings.append(tile_size // i)
+
+        return sorted(samplings)
 
     def __iter__(self) -> Generator[RegularTile, RegularTile, RegularTile]:
         """Iterate over tiles in the tiling."""

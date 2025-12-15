@@ -254,48 +254,11 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         return shapely.within(wrpd_geom.geom, self.proj_zone_geog.geom)
 
 
-def validate_samplings(
-    tilings: dict[int, RegularTiling | IrregularTiling],
-    allowed_samplings: dict[int, list[int | float]] | None,
-) -> None:
-    """Cross-check the sampling of a tiling with given allowed samplings.
-
-    Parameters
-    ----------
-    tilings: dict[int, RegularTiling | IrregularTiling]
-        Dictionary with tiling levels as keys and tilings as values.
-    allowed_samplings: dict[int, list[int | float]] | None
-        Dictionary with tiling levels as keys and allowed samplings as values.
-
-    Raises
-    ------
-    ValueError
-        If the sampling is not allowed.
-
-    """
-    err_msg = (
-        "Grid {}'s sampling {} at {} is not allowed."
-        " The following samplings are allowed: {}"
-    )
-    if allowed_samplings is not None:
-        tiling_levels = sorted(tilings.keys())
-        for tiling_level in tiling_levels:
-            tiling = tilings[tiling_level]
-            samplings_tl = allowed_samplings.get(tiling_level, [])
-            if samplings_tl and tiling.sampling not in samplings_tl:
-                allwd_smpls_str = ", ".join(map(str, samplings_tl))
-                err_msg = err_msg.format(
-                    tiling.name, tiling.sampling, tiling_level, allwd_smpls_str
-                )
-                raise ValueError(err_msg)
-
-
 class TilingSystem(BaseModel):
     """Class defining a multi-level tiling system."""
 
     name: str
     tilings: dict[int, RegularTiling | IrregularTiling]
-    allowed_samplings: dict[int, list[int | float]] | None = None
 
     _tilings_map: dict
 
@@ -305,16 +268,6 @@ class TilingSystem(BaseModel):
         self._tilings_map = {
             tiling.name: level for level, tiling in self.tilings.items()
         }
-
-    @model_validator(mode="after")
-    def check_samplings(self) -> "TilingSystem":
-        """Check the given user samplings.
-
-        Check the sampling defined in a tiling corresponds to the
-        given allowed samplings.
-        """
-        validate_samplings(self.tilings, self.allowed_samplings)
-        return self
 
     @classmethod
     def from_file(cls, json_path: Path) -> "TilingSystem":
@@ -1011,11 +964,18 @@ class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
 
 
+def convert_to_tile_shape(arg: float | tuple[float, float]) -> tuple[float, float]:
+    """Convert tile size/shape to tuple."""
+    return (arg, arg) if isinstance(arg, float | int) else arg
+
+
 class RegularTilingDefinition(BaseModel):
     """Definition for a specific Regular Tiling System."""
 
     name: str
-    tile_size: float | int
+    tile_shape: Annotated[
+        float | tuple[float, float], AfterValidator(convert_to_tile_shape)
+    ]
 
 
 class RegularProjTilingSystem(ProjTilingSystem):
@@ -1041,8 +1001,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling: float | dict[int, float | int],
         proj_def: ProjSystemDefinition,
         tiling_defs: dict[int, RegularTilingDefinition],
-        *,
-        allowed_samplings: dict[int, list[float | int]] | None = None,
     ) -> "RegularProjTilingSystem":
         """Classmethod for creating a regular, projected tiling system.
 
@@ -1060,10 +1018,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
             samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        allowed_samplings: Dict[int, List[float | int]] | None, optional
-            Dictionary with tiling levels as keys and allowed samplings as values.
-            Defaults to None, which means there are no restrictions for the specified
-            sampling.
 
         Returns
         -------
@@ -1083,7 +1037,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
             if tiling_def is None:
                 err_msg = f"There is no tile definition for the tiling level {k}"
                 raise ValueError(err_msg)
-            tile_size_px = int(tiling_def.tile_size / s)
 
             extent = list(proj_def.extent) or [None] * 4
             if None in extent:
@@ -1100,10 +1053,12 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 min_x, min_y, max_x, max_y = extent
                 x_size, y_size = max_x - min_x, max_y - min_y
                 x_size_mod = (
-                    np.ceil(x_size / tiling_def.tile_size) * tiling_def.tile_size
+                    np.ceil(x_size / tiling_def.tile_shape[0])
+                    * tiling_def.tile_shape[0]
                 )
                 y_size_mod = (
-                    np.ceil(y_size / tiling_def.tile_size) * tiling_def.tile_size
+                    np.ceil(y_size / tiling_def.tile_shape[1])
+                    * tiling_def.tile_shape[1]
                 )
                 extent = (min_x, min_y, min_x + x_size_mod, min_y + y_size_mod)
 
@@ -1111,7 +1066,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 name=tiling_def.name,
                 extent=extent,
                 sampling=s,
-                tile_shape_px=(tile_size_px, tile_size_px),
+                tile_shape=tiling_def.tile_shape,
                 tiling_level=k,
                 axis_orientation=proj_def.axis_orientation,
             )
@@ -1121,7 +1076,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
             name=proj_def.name,
             crs=proj_def.crs,
             tilings=tilings,
-            allowed_samplings=allowed_samplings,
         )
 
     @model_validator(mode="after")
@@ -1161,13 +1115,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
         ref_tiling = self.tilings[tiling_levels[0]]
         for tiling_level in tiling_levels[1:]:
             tiling = self.tilings[tiling_level]
-            ref_n_rows, ref_n_cols = (
-                ref_tiling.tm.matrixHeight,
-                ref_tiling.tm.matrixWidth,
-            )
-            n_rows, n_cols = tiling.tm.matrixHeight, tiling.tm.matrixWidth
 
-            if (n_rows % ref_n_rows != 0) or (n_cols % ref_n_cols != 0):
+            if (ref_tiling.tile_shape[0] % tiling.tile_shape[0] != 0) or (
+                ref_tiling.tile_shape[1] % tiling.tile_shape[1] != 0
+            ):
                 is_congruent = False
                 break
 

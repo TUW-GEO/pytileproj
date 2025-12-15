@@ -22,7 +22,7 @@ def e7eu_grid_t1():
         name="e7eut1",
         extent=[0, 0, 8_660_000, 6_020_000],
         sampling=10,
-        tile_shape_px=(10_000, 10_000),
+        tile_shape=(100_000, 100_000),
         tiling_level=1,
         axis_orientation=["E", "S"],
     )
@@ -34,7 +34,7 @@ def e7eu_grid_t3():
         name="e7eut3",
         extent=[0, 0, 8_660_000, 6_020_000],
         sampling=20,
-        tile_shape_px=(15_000, 15_000),
+        tile_shape=(300_000, 300_000),
         tiling_level=0,
         axis_orientation=["E", "S"],
     )
@@ -46,7 +46,7 @@ def e7eu_grid_invalid():
         name="e7_invalid",
         extent=[0, 0, 300_000, 300_000],
         sampling=20,
-        tile_shape_px=(15_000, 15_000),
+        tile_shape=(300_000, 300_000),
         tiling_level=2,
         axis_orientation=["E", "S"],
     )
@@ -167,51 +167,23 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
         crs=27704,
     )
 
-    assert not rpts.is_congruent
+    assert rpts.is_congruent
 
     new_grid = RegularTiling(
-        name="e7eut3",
+        name="e7eut2",
         extent=[0, 0, 8_660_000, 6_020_000],
         sampling=20,
-        tile_shape_px=(10_000, 10_000),
-        tiling_level=0,
+        tile_shape=(200_000, 200_000),
+        tiling_level=1,
         axis_orientation=["E", "S"],
     )
     rpts = RegularProjTilingSystem(
         name="e7eu",
-        tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, new_grid]},
+        tilings={grid.tiling_level: grid for grid in [new_grid, e7eu_grid_t3]},
         crs=27704,
     )
 
-    assert rpts.is_congruent
-
-
-def test_allowed_samplings(e7eu_grid_t1: RegularTiling):
-    allowed_samplings = [1, 5]
-    try:
-        _ = RegularProjTilingSystem(
-            name="e7eu",
-            tilings={e7eu_grid_t1.tiling_level: e7eu_grid_t1},
-            crs=27704,
-            allowed_samplings={e7eu_grid_t1.tiling_level: allowed_samplings},
-        )
-        raise AssertionError
-    except ValueError:
-        assert True
-
-    new_grid = RegularTiling(
-        name="e7eut3",
-        extent=[0, 0, 8660000, 6020000],
-        sampling=5,
-        tile_shape_px=(10000, 10000),
-        tiling_level=0,
-    )
-    _ = RegularProjTilingSystem(
-        name="e7eu",
-        tilings={new_grid.tiling_level: new_grid},
-        crs=27704,
-        allowed_samplings={new_grid.tiling_level: allowed_samplings},
-    )
+    assert not rpts.is_congruent
 
 
 @pytest.mark.vis_installed
