@@ -74,8 +74,8 @@ __all__ = [
     "IrregularProjTilingSystem",
     "ProjCoord",
     "ProjSystem",
+    "ProjSystemDefinition",
     "ProjTilingSystem",
-    "RPTSDefinition",
     "RegularProjTilingSystem",
     "RegularTilingDefinition",
     "TilingSystem",
@@ -1006,8 +1006,8 @@ def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
         ref_tiling = tiling
 
 
-class RPTSDefinition(BaseModel):
-    """Definition for a specific Regular Projected Tiling System."""
+class ProjSystemDefinition(BaseModel):
+    """Definition for a projection system."""
 
     name: str
     crs: Any
@@ -1043,7 +1043,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
     def from_sampling(
         cls,
         sampling: float | dict[int, float | int],
-        rpts_def: RPTSDefinition,
+        proj_def: ProjSystemDefinition,
         tiling_defs: dict[int, RegularTilingDefinition],
         *,
         allowed_samplings: dict[int, list[float | int]] | None = None,
@@ -1055,8 +1055,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         Parameters
         ----------
-        rpts_def: RPTSDefinition
-            Regular, projected tiling system definition (stores name, EPSG code, extent,
+        proj_def: ProjSystemDefinition
+            Projection system definition (stores name, CRS, extent,
             and axis orientation).
         sampling: float | int | Dict[int, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary
@@ -1090,17 +1090,17 @@ class RegularProjTilingSystem(ProjTilingSystem):
             tile_size_px = int(tiling_def.tile_size / s)
             tiling = RegularTiling(
                 name=tiling_def.name,
-                extent=rpts_def.extent,
+                extent=proj_def.extent,
                 sampling=s,
                 tile_shape_px=(tile_size_px, tile_size_px),
                 tiling_level=k,
-                axis_orientation=rpts_def.axis_orientation,
+                axis_orientation=proj_def.axis_orientation,
             )
             tilings[k] = tiling
 
         return cls(
-            name=rpts_def.name,
-            crs=rpts_def.crs,
+            name=proj_def.name,
+            crs=proj_def.crs,
             tilings=tilings,
             allowed_samplings=allowed_samplings,
         )

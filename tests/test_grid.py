@@ -6,9 +6,9 @@ from pydantic_core import ValidationError
 from pytileproj.grid import RegularGrid
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
+    ProjSystemDefinition,
     RegularProjTilingSystem,
     RegularTilingDefinition,
-    RPTSDefinition,
 )
 
 
@@ -28,13 +28,13 @@ def tiling_defs_multi():
 @pytest.fixture(scope="module")
 def rpts_defs():
     return {
-        "e7eu": RPTSDefinition(
+        "e7eu": ProjSystemDefinition(
             name="e7eu",
             crs=27704,
             extent=[0, 0, 8_660_000, 6_020_000],
             axis_orientation=("E", "S"),
         ),
-        "e7af": RPTSDefinition(
+        "e7af": ProjSystemDefinition(
             name="e7af",
             crs=27701,
             extent=[0, 0, 12_000_000, 9_600_000],
@@ -124,7 +124,7 @@ def test_tiling_defs_multi(
     e7grid_from_def = RegularGrid.from_grid_def(json_path, 10)
     json_path.unlink()
 
-    assert e7grid_from_def._rpts_defs == e7grid_to_def._rpts_defs  # noqa: SLF001
+    assert e7grid_from_def._proj_defs == e7grid_to_def._proj_defs  # noqa: SLF001
     assert e7grid_from_def._tiling_defs == e7grid_to_def._tiling_defs  # noqa: SLF001
     assert e7grid_from_def._allowed_samplings == e7grid_to_def._allowed_samplings  # noqa: SLF001
 

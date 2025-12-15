@@ -1,11 +1,8 @@
 import numpy as np
 import pytest
-from osgeo import osr
 
 from pytileproj.tile import IrregularTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
-
-osr.UseExceptions()
 
 
 @pytest.fixture(scope="module")
