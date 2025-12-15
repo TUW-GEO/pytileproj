@@ -977,14 +977,6 @@ def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
             err_msg = f"{err_hdr} {ref_tiling_str} vs. {tiling_str}"
             raise ValueError(err_msg)
 
-        same_extent = ref_tiling.extent == tiling.extent
-        if not same_extent:
-            ref_tiling_str = f"{ref_tiling.tiling_level}:{ref_tiling.extent}"
-            tiling_str = f"{tiling.tiling_level}:{tiling.extent}"
-            err_hdr = "The given tilings do not have the same extent:"
-            err_msg = f"{err_hdr} {ref_tiling_str} vs. {tiling_str}"
-            raise ValueError(err_msg)
-
         same_orientation = ref_tiling.axis_orientation == tiling.axis_orientation
         if not same_orientation:
             ref_tiling_str = f"{ref_tiling.tiling_level}:{ref_tiling.axis_orientation}"
@@ -1006,12 +998,16 @@ def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
         ref_tiling = tiling
 
 
-class ProjSystemDefinition(BaseModel):
+class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
     """Definition for a projection system."""
 
     name: str
     crs: Any
-    extent: tuple[float, float, float, float]
+    extent: tuple[float, float, float | None, float | None] | None = None
+    proj_zone_geog: Annotated[
+        Path | shapely.Geometry | ProjGeom | None,
+        AfterValidator(convert_any_to_geog_geom),
+    ] = None
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
 
 
@@ -1088,9 +1084,32 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 err_msg = f"There is no tile definition for the tiling level {k}"
                 raise ValueError(err_msg)
             tile_size_px = int(tiling_def.tile_size / s)
+
+            extent = list(proj_def.extent) or [None] * 4
+            if None in extent:
+                pyproj_crs = pyproj.CRS.from_user_input(proj_def.crs)
+                proj_zone_geog = proj_def.proj_zone_geog or fetch_proj_zone(
+                    pyproj_crs.to_epsg()
+                )
+                proj_zone = transform_geometry(proj_zone_geog, pyproj_crs)
+                proj_extent = proj_zone.geom.bounds
+                extent = [
+                    proj_extent[i] if extent[i] is None else extent[i]
+                    for i in range(len(extent))
+                ]
+                min_x, min_y, max_x, max_y = extent
+                x_size, y_size = max_x - min_x, max_y - min_y
+                x_size_mod = (
+                    np.ceil(x_size / tiling_def.tile_size) * tiling_def.tile_size
+                )
+                y_size_mod = (
+                    np.ceil(y_size / tiling_def.tile_size) * tiling_def.tile_size
+                )
+                extent = (min_x, min_y, min_x + x_size_mod, min_y + y_size_mod)
+
             tiling = RegularTiling(
                 name=tiling_def.name,
-                extent=proj_def.extent,
+                extent=extent,
                 sampling=s,
                 tile_shape_px=(tile_size_px, tile_size_px),
                 tiling_level=k,
