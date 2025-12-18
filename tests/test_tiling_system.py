@@ -193,7 +193,7 @@ def test_plot(e7eu_rpsb: RegularProjTilingSystem):
 
 def test_proj_zone_geog_io():
     e7eu_ref = ProjSystem(crs=27704)
-    json_path = Path("test_proj_zone_geog.json")
+    json_path = Path("test_proj_zone_geog.geojson")
     e7eu_ref.export_proj_zone_geog(json_path)
 
     e7eu = ProjSystem(crs=27704, proj_zone_geog=json_path)

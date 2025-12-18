@@ -28,11 +28,11 @@
 
 """Tile module defining regular and irregular tiles."""
 
-import json
 from collections.abc import Sequence
 from typing import Any, Union
 
 import numpy as np
+import orjson
 import pyproj
 import shapely
 import shapely.wkt
@@ -265,7 +265,7 @@ class RasterTile(BaseModel):
             Raster tile.
 
         """
-        return cls(**json.loads(json_str))
+        return cls(**orjson.loads(json_str))
 
     def to_json(self) -> str:
         """Create JSON class representation."""

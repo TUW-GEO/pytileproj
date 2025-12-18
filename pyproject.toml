@@ -12,7 +12,8 @@ dependencies = [
     "morecantile >= 7",
     "requests",
     "pillow",
-    "antimeridian >= 0.4.5"
+    "antimeridian >= 0.4.5",
+    "orjson"
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -30,7 +31,7 @@ Repository = "https://github.com/TUW-GEO/pytileproj"
 
 [project.optional-dependencies]
 vis = ["matplotlib", "cartopy"]
-geo = ["geopandas"]
+geo = ["geopandas", "pyarrow"]
 docs = ["sphinx", "sphinx-book-theme", "sphinx-autodoc2", "myst-nb"]
 
 [build-system]

@@ -32,6 +32,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import orjson
 from pydantic import BaseModel, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
@@ -65,7 +66,7 @@ class RegularGrid(BaseModel, extra="allow"):
     @staticmethod
     def _create_rpts_from_def(
         proj_def: ProjSystemDefinition,
-        sampling: float | dict[int, float | int],
+        sampling: float | dict[int | str, float | int],
         tiling_defs: dict[int, RegularTilingDefinition],
     ) -> RegularProjTilingSystem:
         """Create regular projected tiling system from grid definitions.
@@ -78,9 +79,9 @@ class RegularGrid(BaseModel, extra="allow"):
         proj_def: ProjSystemDefinition
             Projection system definition (stores name, CRS, extent,
             and axis orientation).
-        sampling: float | int | Dict[int, float | int]
+        sampling: float | int | Dict[int | str, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary with
-            tiling levels as keys and samplings as values.
+            tiling IDs as keys and samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
 
@@ -116,7 +117,7 @@ class RegularGrid(BaseModel, extra="allow"):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | dict[int, float | int],
+        sampling: float | dict[int | str, float | int],
         proj_defs: dict[str, ProjSystemDefinition],
         tiling_defs: dict[int, RegularTilingDefinition],
     ) -> "RegularGrid":
@@ -127,9 +128,9 @@ class RegularGrid(BaseModel, extra="allow"):
 
         Parameters
         ----------
-        sampling: float | int | Dict[int, float | int]
-            Grid sampling/pixel size specified as a single value or a dictionary
-            with tiling levels as keys and samplings as values.
+        sampling: float | int | Dict[int | str, float | int]
+            Grid sampling/pixel size specified as a single value or a dictionary with
+            tiling IDs as keys and samplings as values.
         proj_defs: dict[str, ProjSystemDefinition]
             Projection system definitions (stores name, CRS, extent,
             and axis orientation).
@@ -158,7 +159,7 @@ class RegularGrid(BaseModel, extra="allow"):
 
     @classmethod
     def from_grid_def(
-        cls, json_path: Path, sampling: float | dict[int, float | int]
+        cls, json_path: Path, sampling: float | dict[int | str, float | int]
     ) -> "RegularGrid":
         """Create a regular grid from a grid definition file.
 
@@ -169,9 +170,9 @@ class RegularGrid(BaseModel, extra="allow"):
         ----------
         json_path: Path
             Path to JSON file storing grid definition.
-        sampling: float | int | Dict[int, float | int]
+        sampling: float | int | Dict[int | str, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary with
-            tiling levels as keys and samplings as values.
+            tiling IDs as keys and samplings as values.
 
         Returns
         -------
@@ -180,7 +181,7 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         with json_path.open() as f:
-            grid_def = json.load(f)
+            grid_def = orjson.loads(f.read())
 
         rpts_defs = {
             name: ProjSystemDefinition(**rpts_def)
@@ -235,43 +236,16 @@ class RegularGrid(BaseModel, extra="allow"):
                     tile_shape = rpts[tiling_level].tile_shape
                     tiling_def = RegularTilingDefinition(
                         name=rpts[tiling_level].name, tile_shape=tile_shape
-                    ).model_dump()
+                    )
                     tiling_defs[tiling_level] = tiling_def
             rpts_defs[name] = ProjSystemDefinition(
                 name=name,
                 crs=rpts.crs,
                 extent=rpts[ref_tiling_level].extent,
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
-            ).model_dump()
+            )
 
         return rpts_defs, tiling_defs
-
-    def _fetch_ori_grid_def(
-        self,
-    ) -> tuple[
-        dict[str, ProjSystemDefinition],
-        dict[int, RegularTilingDefinition],
-        dict[int, list[float | int]],
-        bool,
-    ]:
-        """Create regular grid system definitions.
-
-        Create regular grid definitions from the attributes
-        stored in the regular grid.
-
-        Returns
-        -------
-        Dict[str, ProjSystemDefinition]
-            Projection system definitions (stores name, CRS, extent,
-            and axis orientation).
-        Dict[int, RegularTilingDefinition]
-            Tiling definition (stores name/tiling level and tile size).
-
-        """
-        rpts_def = {k: v.model_dump() for k, v in self._proj_defs.items()}
-        tilings_def = {k: v.model_dump() for k, v in self._tiling_defs.items()}
-
-        return rpts_def, tilings_def
 
     def to_grid_def(self, json_path: Path) -> None:
         """Write the regular grid definition to a JSON file.
@@ -285,14 +259,9 @@ class RegularGrid(BaseModel, extra="allow"):
         if not self._proj_defs:
             proj_defs, tiling_defs = self._fetch_mod_grid_def()
         else:
-            proj_defs, tiling_defs = self._fetch_ori_grid_def()
+            proj_defs, tiling_defs = self._proj_defs, self._tiling_defs
 
-        grid_def = {}
-        grid_def["proj_defs"] = proj_defs
-        grid_def["tiling_defs"] = tiling_defs
-        grid_def = json.dumps(grid_def, indent=JSON_INDENT)
-        with json_path.open("w") as f:
-            f.writelines(grid_def)
+        write_grid_def(json_path, proj_defs, tiling_defs)
 
     @staticmethod
     def _validate_json(
@@ -379,3 +348,29 @@ class RegularGrid(BaseModel, extra="allow"):
 
         """
         return getattr(self, name)
+
+
+def write_grid_def(
+    json_path: Path,
+    proj_defs: dict[str, ProjSystemDefinition],
+    tiling_defs: dict[int, RegularTilingDefinition],
+) -> None:
+    """Write grid definitions to a JSON file.
+
+    Parameters
+    ----------
+    json_path: Path
+            Path to JSON file.
+    proj_defs: dict[str, ProjSystemDefinition]
+            Projection system definitions (stores name, CRS, extent,
+            and axis orientation).
+    tiling_defs: Dict[int, RegularTilingDefinition]
+        Tiling definition (stores name/tiling level and tile size).
+
+    """
+    grid_def = {}
+    grid_def["proj_defs"] = {k: v.model_dump() for k, v in proj_defs.items()}
+    grid_def["tiling_defs"] = {k: v.model_dump() for k, v in tiling_defs.items()}
+    grid_def = json.dumps(grid_def, indent=JSON_INDENT)
+    with json_path.open("w") as f:
+        f.writelines(grid_def)

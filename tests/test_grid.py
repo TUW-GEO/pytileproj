@@ -19,8 +19,8 @@ def tiling_defs():
 @pytest.fixture(scope="module")
 def tiling_defs_multi():
     return {
-        1: RegularTilingDefinition(name="t1", tile_shape=(100_000, 100_000)),
-        2: RegularTilingDefinition(name="t2", tile_shape=(200_000, 200_000)),
+        1: RegularTilingDefinition(name="t1", tile_shape=(200_000, 200_000)),
+        2: RegularTilingDefinition(name="t2", tile_shape=(100_000, 100_000)),
     }
 
 
@@ -143,7 +143,7 @@ def test_tiling_defs_multi_sampling_diff(
     assert e7grid_from_def.model_dump() == e7grid.model_dump()
 
 
-def test_tiling_defs_multi_mismatch(
+def test_tiling_defs_multi_io(
     rpts_defs: dict[str, RegularTilingDefinition],
     tiling_defs_multi: dict[int, RegularTilingDefinition],
 ):
@@ -158,7 +158,8 @@ def test_tiling_defs_multi_mismatch(
     e7grid_from_def = RegularGrid.from_grid_def(json_path, 10)
     json_path.unlink()
 
-    assert len(e7grid_from_def._tiling_defs) == 1  # noqa: SLF001
+    len_tiling_defs = 2
+    assert len(e7grid_from_def._tiling_defs) == len_tiling_defs  # noqa: SLF001
 
 
 if __name__ == "__main__":

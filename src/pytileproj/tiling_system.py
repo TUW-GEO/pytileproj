@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Union
 
 import numpy as np
+import orjson
 import pyproj
 import shapely
 from morecantile.models import Tile as RegularTile
@@ -285,7 +286,7 @@ class TilingSystem(BaseModel):
 
         """
         with json_path.open() as f:
-            pp_def = json.load(f)
+            pp_def = orjson.loads(f.read())
 
         return cls(**pp_def)
 
@@ -998,9 +999,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | dict[int, float | int],
+        sampling: float | dict[int | str, float | int],
         proj_def: ProjSystemDefinition,
         tiling_defs: dict[int, RegularTilingDefinition],
+        **kwargs: dict[str, Any],
     ) -> "RegularProjTilingSystem":
         """Classmethod for creating a regular, projected tiling system.
 
@@ -1012,12 +1014,13 @@ class RegularProjTilingSystem(ProjTilingSystem):
         proj_def: ProjSystemDefinition
             Projection system definition (stores name, CRS, extent,
             and axis orientation).
-        sampling: float | int | Dict[int, float | int]
-            Grid sampling/pixel size specified as a single value or a dictionary
-            with tiling levels as keys and
-            samplings as values.
+        sampling: float | int | Dict[int | str, float | int]
+            Grid sampling/pixel size specified as a single value or a dictionary with
+            tiling IDs as keys and samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
+        **kwargs: dict[str, Any]
+            Additional class attributes.
 
         Returns
         -------
@@ -1028,12 +1031,19 @@ class RegularProjTilingSystem(ProjTilingSystem):
         if isinstance(sampling, dict):
             samplings = sampling
         else:
-            samplings = {}
-            samplings[1] = sampling
+            samplings = dict.fromkeys(tiling_defs.keys(), sampling)
 
         tilings = {}
         for k, s in samplings.items():
-            tiling_def = tiling_defs.get(k)
+            if isinstance(k, int):
+                tiling_def = tiling_defs.get(k)
+            else:
+                tiling_def = None
+                for v in tiling_defs.values():
+                    if k == v.name:
+                        tiling_def = v
+                        break
+
             if tiling_def is None:
                 err_msg = f"There is no tile definition for the tiling level {k}"
                 raise ValueError(err_msg)
@@ -1076,6 +1086,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
             name=proj_def.name,
             crs=proj_def.crs,
             tilings=tilings,
+            proj_zone_geog=proj_def.proj_zone_geog,
+            **kwargs,
         )
 
     @model_validator(mode="after")

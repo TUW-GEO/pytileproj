@@ -28,12 +28,12 @@
 
 """Utility module for projected geometries."""
 
-import json
 import warnings
 from pathlib import Path
 from typing import Annotated, Any, NamedTuple
 
 import numpy as np
+import orjson
 import pyproj
 import requests
 import shapely
@@ -43,10 +43,19 @@ from PIL import Image, ImageDraw
 from pydantic import AfterValidator, BaseModel, model_serializer
 from shapely.geometry import MultiPolygon, Polygon
 
-from pytileproj._const import DECIMALS, DEFAULT_SEG_NUM, TIMEOUT, VIS_INSTALLED
+from pytileproj._const import (
+    DECIMALS,
+    DEFAULT_SEG_NUM,
+    GEO_INSTALLED,
+    TIMEOUT,
+    VIS_INSTALLED,
+)
 
 if VIS_INSTALLED:
     import cartopy.crs as ccrs
+
+if GEO_INSTALLED:
+    import geopandas as gpd
 
 __all__ = [
     "ProjCoord",
@@ -115,7 +124,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom | None:
     zone_geom = None
     code_resp = requests.get(f"{epsg_code_url}/{epsg}/", timeout=TIMEOUT)
     if code_resp.ok:
-        code_data = json.loads(code_resp.content)
+        code_data = orjson.loads(code_resp.content)
         code_usages = code_data["Usage"]
         if len(code_usages):
             if len(code_usages) != 1:
@@ -126,7 +135,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom | None:
                 timeout=TIMEOUT,
             )
             if extent_resp.ok:
-                extent_data = json.loads(extent_resp.content)
+                extent_data = orjson.loads(extent_resp.content)
                 geom_type = extent_data["type"]
                 coords = extent_data["coordinates"]
                 if geom_type == "Polygon":
@@ -640,8 +649,17 @@ def convert_any_to_geog_geom(
 
     """
     if isinstance(arg, Path):
-        with arg.open() as f:
-            geom = shapely.from_geojson(f.read())
+        if arg.suffix == ".geojson":
+            with arg.open() as f:
+                geom = shapely.from_geojson(f.read())
+        elif arg.suffix == ".parquet":
+            geom = gpd.read_parquet(arg)["geometry"][0]
+        else:
+            err_msg = (
+                "File format is not supported "
+                f"(only 'geojson' and 'parquet'): {arg.suffix}"
+            )
+            raise OSError(err_msg)
         proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
     elif isinstance(arg, shapely.Geometry):
         proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))
