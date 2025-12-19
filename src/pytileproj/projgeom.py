@@ -91,7 +91,7 @@ def convert_crs(arg: Any) -> pyproj.CRS:  # noqa: ANN401
 class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     """Define a geometry in a certain projection."""
 
-    geom: Annotated[shapely.Geometry, AfterValidator(convert_geom)]
+    geom: Annotated[Any, AfterValidator(convert_geom)]
     crs: Annotated[Any, AfterValidator(convert_crs)]
 
     @model_serializer
@@ -632,7 +632,7 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
 
 
 def convert_any_to_geog_geom(
-    arg: Path | shapely.Geometry | ProjGeom | None,
+    arg: Path | shapely.Geometry | ProjGeom | str | dict | None,
 ) -> ProjGeom | None:
     """Convert an arbitrary input to a projected geometry in the LonLat system.
 
@@ -643,6 +643,7 @@ def convert_any_to_geog_geom(
             - a path to a GeoJSON file
             - a shapely.Geometry
             - a ProjGeom
+            - str
             - None
 
     Returns
@@ -667,6 +668,10 @@ def convert_any_to_geog_geom(
         proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
     elif isinstance(arg, shapely.Geometry):
         proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))
+    elif isinstance(arg, str):
+        proj_geom = ProjGeom(geom=swkt.loads(arg), crs=pyproj.CRS.from_epsg(4326))
+    elif isinstance(arg, dict):
+        proj_geom = ProjGeom(**arg)
     elif isinstance(arg, ProjGeom):
         proj_geom = arg
     else:

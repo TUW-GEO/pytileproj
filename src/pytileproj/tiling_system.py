@@ -41,7 +41,6 @@ from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
     BaseModel,
-    BeforeValidator,
     NonNegativeInt,
     PrivateAttr,
     model_validator,
@@ -111,10 +110,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     """Class defining a projection represented by an EPSG code and a zone."""
 
     crs: Any
-    proj_zone_geog: Annotated[
-        ProjGeom | Path | shapely.Geometry | None,
-        BeforeValidator(convert_any_to_geog_geom),
-    ] = None
+    proj_zone_geog: Annotated[Any, AfterValidator(convert_any_to_geog_geom)] = None
 
     _proj_zone_geog: ProjGeom = PrivateAttr()
     _proj_zone: ProjGeom = PrivateAttr()
@@ -954,10 +950,7 @@ class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
     crs: Any
     min_xy: tuple[int | float, int | float] | None = None
     max_xy: tuple[int | float, int | float] | None = None
-    proj_zone_geog: Annotated[
-        ProjGeom | None,
-        BeforeValidator(convert_any_to_geog_geom),
-    ] = None
+    proj_zone_geog: Annotated[Any, AfterValidator(convert_any_to_geog_geom)] = None
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N")
 
 
