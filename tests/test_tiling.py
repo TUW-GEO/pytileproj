@@ -9,36 +9,36 @@ from pytileproj.tiling import IrregularTiling, RegularTiling
 
 
 @pytest.fixture(scope="module")
-def reg_grid():
+def reg_tiling():
     return RegularTiling(
         name="grid", extent=(0, 0, 180, 90), sampling=1, tile_shape=(10, 10)
     )
 
 
 @pytest.fixture
-def irreg_grid():
-    tile_0 = IrregularTile(id="0", z=0, extent=(-180, -90, 180, -45))
-    tile_1 = IrregularTile(id="3", z=0, extent=(-180, 0, 0, 90))
-    tile_2 = IrregularTile(id="2", z=0, extent=(0, 0, 180, 90))
-    tile_4 = IrregularTile(id="1", z=0, extent=(-180, -45, 180, 0))
-    tiles = {tile.id: tile for tile in [tile_0, tile_1, tile_2, tile_4]}
+def irreg_tiling():
+    tile_0 = IrregularTile(name="0", z=0, extent=(-180, -90, 180, -45))
+    tile_1 = IrregularTile(name="3", z=0, extent=(-180, 0, 0, 90))
+    tile_2 = IrregularTile(name="2", z=0, extent=(0, 0, 180, 90))
+    tile_4 = IrregularTile(name="1", z=0, extent=(-180, -45, 180, 0))
+    tiles = {tile.name: tile for tile in [tile_0, tile_1, tile_2, tile_4]}
 
-    return IrregularTiling(name="grid", tiles=tiles)
-
-
-def test_reg_ori(reg_grid: RegularTiling):
-    assert reg_grid.origin_xy == (0, 0)
+    return IrregularTiling(name="grid", tiles_map=tiles)
 
 
-def test_reg_grid(reg_grid: RegularTiling):
-    assert reg_grid.n_tiles == 18 * 9
+def test_reg_ori(reg_tiling: RegularTiling):
+    assert reg_tiling.origin_xy == (0, 0)
 
 
-def test_iter_reg_tiles(reg_grid: RegularTiling):
+def test_reg_grid(reg_tiling: RegularTiling):
+    assert reg_tiling.n_tiles == 18 * 9
+
+
+def test_iter_reg_tiles(reg_tiling: RegularTiling):
     test_tile = None
     x_should, y_should = 4, 2
-    i_stop = x_should * reg_grid.n_tiles_y + y_should
-    for i, tile in enumerate(reg_grid):
+    i_stop = x_should * reg_tiling.n_tiles_y + y_should
+    for i, tile in enumerate(reg_tiling.tiles()):
         if i == i_stop:
             test_tile = tile
             break
@@ -46,8 +46,8 @@ def test_iter_reg_tiles(reg_grid: RegularTiling):
     assert (test_tile.x, test_tile.y, test_tile.z) == (x_should, y_should, 0)
 
 
-def test_to_ogc(reg_grid: RegularTiling):
-    ogc_grid_dict = reg_grid.to_ogc_standard()
+def test_to_ogc(reg_tiling: RegularTiling):
+    ogc_grid_dict = reg_tiling.to_ogc_standard()
     assert ogc_grid_dict == {
         "title": "grid",
         "description": None,
@@ -65,39 +65,39 @@ def test_to_ogc(reg_grid: RegularTiling):
     }
 
 
-def test_irreg_grid(irreg_grid: IrregularTiling):
-    assert irreg_grid.tile_ids == ["0", "3", "2", "1"]
+def test_irreg_grid(irreg_tiling: IrregularTiling):
+    assert irreg_tiling.tile_ids == ["0", "3", "2", "1"]
 
 
-def test_adj_matrix(irreg_grid: IrregularTiling):
+def test_adj_matrix(irreg_tiling: IrregularTiling):
     adj_matrix = np.array(
         [[0, 0, 0, 1], [0, 0, 1, 1], [0, 1, 0, 1], [1, 1, 1, 0]], dtype=np.bool_
     )
-    assert np.array_equal(cast("np.ndarray", irreg_grid.adjacency_matrix), adj_matrix)
+    assert np.array_equal(cast("np.ndarray", irreg_tiling.adjacency_matrix), adj_matrix)
 
 
-def test_neighbours(irreg_grid: IrregularTiling):
-    tiles = irreg_grid.neighbours("1")
-    assert sorted([tile.id for tile in tiles]) == ["0", "2", "3"]
+def test_neighbours(irreg_tiling: IrregularTiling):
+    tiles = irreg_tiling.neighbours("1")
+    assert sorted([tile.name for tile in tiles]) == ["0", "2", "3"]
 
-    tiles = irreg_grid.neighbours("0")
-    assert sorted([tile.id for tile in tiles]) == ["1"]
+    tiles = irreg_tiling.neighbours("0")
+    assert sorted([tile.name for tile in tiles]) == ["1"]
 
 
-def test_iter_irreg_tiles(irreg_grid: IrregularTiling):
+def test_iter_irreg_tiles(irreg_tiling: IrregularTiling):
     test_tile = None
     stop_idx = 1
-    for i, tile in enumerate(irreg_grid):
+    for i, tile in enumerate(irreg_tiling.tiles()):
         if i == stop_idx:
             test_tile = tile
             break
 
-    assert (test_tile.id, test_tile.z) == ("3", 0)
+    assert (test_tile.name, test_tile.z) == ("3", 0)
 
 
-def test_irreg_tiles_bbox(irreg_grid: IrregularTiling):
-    tiles = irreg_grid.tiles_intersecting_bbox((-10, -10, 10, 10))
-    assert sorted([tile.id for tile in tiles]) == ["1", "2", "3"]
+def test_irreg_tiles_bbox(irreg_tiling: IrregularTiling):
+    tiles = irreg_tiling.tiles_intersecting_bbox((-10, -10, 10, 10))
+    assert sorted([tile.name for tile in tiles]) == ["1", "2", "3"]
 
 
 def test_allowed_samplings():

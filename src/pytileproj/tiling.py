@@ -30,7 +30,7 @@
 
 from collections.abc import Generator
 from enum import Enum
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import shapely
@@ -39,6 +39,7 @@ from morecantile.models import TileMatrix
 from pydantic import AfterValidator, BaseModel, NonNegativeFloat, model_validator
 from shapely.geometry import Polygon
 
+from pytileproj._types import IrregTileGenerator, RegTileGenerator
 from pytileproj.tile import IrregularTile
 
 __all__ = []
@@ -63,26 +64,9 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
 
     _tm: TileMatrix
 
-    def __init__(  # noqa: PLR0913
-        self,
-        name: str,
-        extent: tuple[float, float, float, float],
-        sampling: NonNegativeFloat,
-        tile_shape: tuple[NonNegativeFloat, NonNegativeFloat],
-        tiling_level: int | None = 0,
-        axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N"),
-        **kwargs: dict[str, Any],
-    ) -> None:
-        """Initialise regular tiling object."""
-        super().__init__(
-            name=name,
-            extent=extent,
-            sampling=sampling,
-            tile_shape=tile_shape,
-            tiling_level=tiling_level,
-            axis_orientation=axis_orientation,
-            **kwargs,
-        )
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the regular tiling object."""
+        super().model_post_init(context)
 
         tile_width, tile_height = (
             int(self.tile_shape[0] / self.sampling),
@@ -191,7 +175,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
 
         return sorted(samplings)
 
-    def items(self) -> Generator[RegularTile]:
+    def tiles(self) -> RegTileGenerator:
         """Iterate over tiles in the tiling."""
         for x in range(self._tm.matrixWidth):
             for y in range(self._tm.matrixHeight):
@@ -233,40 +217,22 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     """Define irregular tiling scheme."""
 
     name: str
-    tiles: dict[str, IrregularTile]
+    tiles_map: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
         np.ndarray | None, AfterValidator(validate_adj_matrix)
     ] = None
     tiling_level: int = 0
 
-    _adjacency_matrix: np.ndarray
-
-    def __init__(
-        self,
-        /,
-        name: str,
-        tiles: dict[str, IrregularTile],
-        adjacency_matrix: np.ndarray | None = None,
-        tiling_level: int = 0,
-        **kwargs: dict[str, Any],
-    ) -> None:
-        """Initialise irregular tiling object."""
-        super().__init__(
-            name=name,
-            tiles=tiles,
-            adjacency_matrix=adjacency_matrix,
-            tiling_level=tiling_level,
-            **kwargs,
-        )
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the irregular tiling object."""
+        super().model_post_init(context)
         if self.adjacency_matrix is None:
-            self._adjacency_matrix = self._build_adjacency_matrix()
-        else:
-            self._adjacency_matrix = cast("np.ndarray", adjacency_matrix)
+            self.adjacency_matrix = self._build_adjacency_matrix()
 
     @property
     def tile_ids(self) -> list[str]:
         """All tile ID's of the tiling."""
-        return list(self.tiles.keys())
+        return list(self.tiles_map.keys())
 
     def neighbours(self, tile_id: str) -> list[IrregularTile]:
         """Return the neighbouring tiles for a given tile ID.
@@ -283,7 +249,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         """
         tile_idx = self.tile_ids.index(tile_id)
-        nbr_idxs = self._adjacency_matrix[tile_idx, :]
+        nbr_idxs = self.adjacency_matrix[tile_idx, :]
 
         return [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
@@ -313,28 +279,28 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
                 (min_x, min_y),
             ]
         )
-        for tile in self.tiles.values():
+        for tile in self.tiles_map.values():
             if shapely.intersects(tile.boundary, bbox):
                 yield tile
 
     def _build_adjacency_matrix(self) -> np.ndarray:
         """Create adjacency matrix based on tiles touching each other."""
-        n_tiles = len(self.tiles)
+        n_tiles = len(self.tiles_map)
         adjacency_matrix = np.zeros((n_tiles, n_tiles), dtype=bool)
         for i in range(n_tiles):
             for j in range(i, n_tiles):
                 if i != j:
-                    tile_i = self.tiles[self.tile_ids[i]]
-                    tile_j = self.tiles[self.tile_ids[j]]
+                    tile_i = self.tiles_map[self.tile_ids[i]]
+                    tile_j = self.tiles_map[self.tile_ids[j]]
                     if shapely.touches(tile_i.boundary, tile_j.boundary):
                         adjacency_matrix[i, j] = True
                         adjacency_matrix[j, i] = True
 
         return adjacency_matrix
 
-    def items(self) -> Generator[IrregularTile]:
+    def tiles(self) -> IrregTileGenerator:
         """Yield one tile after the other."""
-        yield from self.tiles.values()
+        yield from self.tiles_map.values()
 
     def __getitem__(self, tile_id: str) -> IrregularTile:
         """Return tile instance corresponding to the given tile ID.
@@ -350,7 +316,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
             Tile instance corresponding to the given tile ID.
 
         """
-        return self.tiles[tile_id]
+        return self.tiles_map[tile_id]
 
 
 if __name__ == "__main__":

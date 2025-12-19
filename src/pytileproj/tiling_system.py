@@ -38,7 +38,13 @@ import pyproj
 import shapely
 from morecantile.models import CRS, TileMatrixSet
 from morecantile.models import Tile as RegularTile
-from pydantic import AfterValidator, BaseModel, NonNegativeInt, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    NonNegativeInt,
+    model_validator,
+)
 
 from pytileproj._const import GEO_INSTALLED, JSON_INDENT, VIS_INSTALLED
 from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
@@ -47,7 +53,7 @@ from pytileproj._types import (
     Extent,
     PartialExtent,
     RasterTileGenerator,
-    TileIterator,
+    TileGenerator,
 )
 from pytileproj.projgeom import (
     ProjCoord,
@@ -107,7 +113,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     crs: Any
     proj_zone_geog: Annotated[
         ProjGeom | None,
-        AfterValidator(convert_any_to_geog_geom),
+        BeforeValidator(convert_any_to_geog_geom),
     ] = None
 
     _proj_zone: ProjGeom | None = None
@@ -115,15 +121,9 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     _from_geog: pyproj.Transformer | None = None
     _crs: pyproj.CRS | None = None
 
-    def __init__(
-        self,
-        /,
-        crs: Any,  # noqa: ANN401
-        proj_zone_geog: Path | shapely.Geometry | ProjGeom | None = None,
-        **kwargs: dict[str, Any],
-    ) -> None:
-        """Initialise projection system object."""
-        super().__init__(crs=crs, proj_zone_geog=proj_zone_geog, **kwargs)
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the projection system object."""
+        super().model_post_init(context)
         self._crs = pyproj.CRS.from_user_input(self.crs)
         geog_crs = pyproj.CRS(4326)
         self._to_geog = pyproj.Transformer.from_crs(self._crs, geog_crs, always_xy=True)
@@ -132,10 +132,10 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         )
 
         epsg = self._crs.to_epsg()
-        if proj_zone_geog is not None:
-            self.proj_zone_geog = cast("ProjGeom", proj_zone_geog)
+        if self.proj_zone_geog is not None:
+            self.proj_zone_geog = cast("ProjGeom", self.proj_zone_geog)
         elif epsg is not None:
-            proj_zone_geog = fetch_proj_zone(epsg)
+            self.proj_zone_geog = fetch_proj_zone(epsg)
         else:
             err_msg = "Could not extract projection zone boundaries."
             raise ValueError(err_msg)
@@ -284,15 +284,9 @@ class TilingSystem(BaseModel):
 
     _tilings_map: dict = {}
 
-    def __init__(
-        self,
-        /,
-        name: str,
-        tilings: dict[int, RegularTiling | IrregularTiling],
-        **kwargs: dict[str, Any],
-    ) -> None:
-        """Initialise tiling system object."""
-        super().__init__(name=name, tilings=tilings, **kwargs)
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the tiling system object."""
+        super().model_post_init(context)
         self._tilings_map = {
             tiling.name: level for level, tiling in self.tilings.items()
         }
@@ -366,7 +360,7 @@ class TilingSystem(BaseModel):
         """Return tiling levels."""
         return list(self.tilings.keys())
 
-    def _tiles_at_level(self, tiling_level: int) -> TileIterator:
+    def _tiles_at_level(self, tiling_level: int) -> TileGenerator:
         """Return all tiles at a specific tiling level or zoom.
 
         Parameters
@@ -543,7 +537,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         self,
         bbox: tuple[float, float, float, float],
         tiling_level: int = 0,
-    ) -> TileIterator:
+    ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
 
         Parameters
@@ -710,7 +704,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             ax.coastlines()
             ax.add_feature(cartopy.feature.BORDERS)
 
-        for tile in self[tiling_id]:
+        for tile in self[tiling_id].tiles():
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, tilename)
             if self._tile_in_zone(raster_tile):
@@ -855,7 +849,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
                     self[tiling_level], tiling_attrs[i]
                 )
 
-            for tile in self[tiling_level]:
+            for tile in self[tiling_level].tiles():
                 tilename = self._tile_to_name(tile)
                 rtile = self._tile_to_raster_tile(tile, tilename)
                 if not self._tile_in_zone(rtile):
@@ -960,7 +954,7 @@ class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
     extent: PartialExtent | None = None
     proj_zone_geog: Annotated[
         ProjGeom | None,
-        AfterValidator(convert_any_to_geog_geom),
+        BeforeValidator(convert_any_to_geog_geom),
     ] = None
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N")
 
@@ -986,19 +980,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
     _tms: TileMatrixSet
 
-    def __init__(
-        self,
-        /,
-        name: str,
-        tilings: dict[int, RegularTiling | IrregularTiling],
-        crs: Any,  # noqa: ANN401
-        proj_zone_geog: ProjGeom | None = None,
-    ) -> None:
-        """Initialise regular projected tiling system."""
-        super().__init__(
-            name=name, tilings=tilings, crs=crs, proj_zone_geog=proj_zone_geog
-        )
-        wkt = self._crs.to_json_dict()
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the regular projected tiling system."""
+        super().model_post_init(context)
+        wkt = self.pyproj_crs.to_json_dict()
         self._tms = TileMatrixSet(
             crs={"wkt": wkt},
             tileMatrices=[
@@ -1397,7 +1382,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
     def _get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_level: int = 0
-    ) -> TileIterator:
+    ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
 
         Parameters

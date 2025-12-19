@@ -40,7 +40,6 @@ from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
 
 from pytileproj._const import DECIMALS, JSON_INDENT, VIS_INSTALLED
-from pytileproj._types import Extent
 from pytileproj.projgeom import (
     ProjGeom,
     ij2xy,
@@ -62,6 +61,7 @@ if VIS_INSTALLED:
 
 
 __all__ = ["RasterTile"]
+Extent = tuple[int | float, int | float, int | float, int | float]
 
 
 class IrregularTile(BaseModel):
@@ -73,11 +73,9 @@ class IrregularTile(BaseModel):
 
     _boundary: shapely.Polygon
 
-    def __init__(
-        self, /, name: str, z: int, extent: Extent, **kwargs: dict[str, Any]
-    ) -> None:
-        """Initialise irrengular tile object."""
-        super().__init__(name=name, z=z, extent=extent, **kwargs)
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the irregular tile object."""
+        super().model_post_init(context)
 
         min_x, min_y, max_x, max_y = self.extent
         self._boundary = shapely.Polygon(
@@ -173,31 +171,9 @@ class RasterTile(BaseModel):
     _boundary: ProjGeom
     _crs: pyproj.CRS
 
-    def __init__(  # noqa: PLR0913
-        self,
-        crs: Any,  # noqa: ANN401
-        n_rows: NonNegativeInt,
-        n_cols: NonNegativeInt,
-        geotrans: tuple[float, float, float, float, float, float] = (
-            0,
-            1,
-            0,
-            0,
-            0,
-            -1,
-        ),
-        px_origin: str = "ul",
-        name: str | None = None,
-    ) -> None:
-        """Initialise raster tile object."""
-        super().__init__(
-            crs=crs,
-            n_rows=n_rows,
-            n_cols=n_cols,
-            geotrans=geotrans,
-            px_origin=px_origin,
-            name=name,
-        )
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the raster tile object."""
+        super().model_post_init(context)
         self._crs = pyproj.CRS.from_user_input(self.crs)
         self._boundary = self.__proj_geom_boundary()
 

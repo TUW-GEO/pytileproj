@@ -54,8 +54,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
     """
 
-    _proj_defs: dict[int, ProjSystemDefinition]
-    _tiling_defs: dict[int, RegularTilingDefinition]
+    _proj_defs: dict[int, ProjSystemDefinition] | None = None
+    _tiling_defs: dict[int, RegularTilingDefinition] | None = None
 
     _rpts_cls = RegularProjTilingSystem
 
@@ -252,7 +252,7 @@ class RegularGrid(BaseModel, extra="allow"):
             Path to JSON file, where the grid definition should be stored.
 
         """
-        if self._proj_defs is not None and self._tiling_defs is not None:
+        if self._proj_defs is None and self._tiling_defs is None:
             proj_defs, tiling_defs = self._fetch_mod_grid_def()
         else:
             proj_defs = cast("dict[str, ProjSystemDefinition]", self._proj_defs)
