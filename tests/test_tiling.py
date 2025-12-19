@@ -1,3 +1,5 @@
+from typing import cast
+
 import numpy as np
 import pytest
 from pydantic_core import ValidationError
@@ -9,16 +11,16 @@ from pytileproj.tiling import IrregularTiling, RegularTiling
 @pytest.fixture(scope="module")
 def reg_grid():
     return RegularTiling(
-        name="grid", extent=[0, 0, 180, 90], sampling=1, tile_shape=(10, 10)
+        name="grid", extent=(0, 0, 180, 90), sampling=1, tile_shape=(10, 10)
     )
 
 
 @pytest.fixture
 def irreg_grid():
-    tile_0 = IrregularTile(id="0", z=0, extent=[-180, -90, 180, -45])
-    tile_1 = IrregularTile(id="3", z=0, extent=[-180, 0, 0, 90])
-    tile_2 = IrregularTile(id="2", z=0, extent=[0, 0, 180, 90])
-    tile_4 = IrregularTile(id="1", z=0, extent=[-180, -45, 180, 0])
+    tile_0 = IrregularTile(id="0", z=0, extent=(-180, -90, 180, -45))
+    tile_1 = IrregularTile(id="3", z=0, extent=(-180, 0, 0, 90))
+    tile_2 = IrregularTile(id="2", z=0, extent=(0, 0, 180, 90))
+    tile_4 = IrregularTile(id="1", z=0, extent=(-180, -45, 180, 0))
     tiles = {tile.id: tile for tile in [tile_0, tile_1, tile_2, tile_4]}
 
     return IrregularTiling(name="grid", tiles=tiles)
@@ -71,7 +73,7 @@ def test_adj_matrix(irreg_grid: IrregularTiling):
     adj_matrix = np.array(
         [[0, 0, 0, 1], [0, 0, 1, 1], [0, 1, 0, 1], [1, 1, 1, 0]], dtype=np.bool_
     )
-    assert np.array_equal(irreg_grid.adjacency_matrix, adj_matrix)
+    assert np.array_equal(cast("np.ndarray", irreg_grid.adjacency_matrix), adj_matrix)
 
 
 def test_neighbours(irreg_grid: IrregularTiling):
@@ -94,7 +96,7 @@ def test_iter_irreg_tiles(irreg_grid: IrregularTiling):
 
 
 def test_irreg_tiles_bbox(irreg_grid: IrregularTiling):
-    tiles = irreg_grid.tiles_intersecting_bbox([-10, -10, 10, 10])
+    tiles = irreg_grid.tiles_intersecting_bbox((-10, -10, 10, 10))
     assert sorted([tile.id for tile in tiles]) == ["1", "2", "3"]
 
 
@@ -138,12 +140,12 @@ def test_allowed_samplings():
 
 def test_validate_sampling():
     _ = RegularTiling(
-        name="grid", extent=[0, 0, 180, 90], sampling=5, tile_shape=(10, 10)
+        name="grid", extent=(0, 0, 180, 90), sampling=5, tile_shape=(10, 10)
     )
 
     try:
         _ = RegularTiling(
-            name="grid", extent=[0, 0, 180, 90], sampling=3, tile_shape=(10, 10)
+            name="grid", extent=(0, 0, 180, 90), sampling=3, tile_shape=(10, 10)
         )
         raise AssertionError
     except ValidationError:

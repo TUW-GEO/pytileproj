@@ -45,21 +45,6 @@ master_doc = "index"
 project = "pytileproj"
 copyright = "2025, TU Wien"  # noqa: A001
 
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
-# version: The short X.Y version.
-# release: The full version, including alpha/beta/rc tags.
-# If you don't need the separation provided between version and release,
-# just set them both to the same value.
-try:
-    from pytileproj import __version__ as version
-except ImportError:
-    version = ""
-
-release = version
-
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", ".venv"]

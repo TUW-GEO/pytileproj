@@ -30,7 +30,7 @@
 
 import warnings
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple
+from typing import Annotated, Any, NamedTuple, cast
 
 import numpy as np
 import orjson
@@ -91,7 +91,7 @@ def convert_crs(arg: Any) -> pyproj.CRS:  # noqa: ANN401
 class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     """Define a geometry in a certain projection."""
 
-    geom: Annotated[str | shapely.Geometry, AfterValidator(convert_geom)]
+    geom: Annotated[shapely.Geometry, AfterValidator(convert_geom)]
     crs: Annotated[Any, AfterValidator(convert_crs)]
 
     @model_serializer
@@ -110,7 +110,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom | None:
 
     Returns
     -------
-    ProjGeom | None
+    ProjGeom
         Projected polygon or multi-polygon object representing the projection zone.
 
     Notes
@@ -257,18 +257,18 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
 
 
 def transform_coords(
-    x: float,
-    y: float,
+    x: float | np.ndarray,
+    y: float | np.ndarray,
     this_crs: Any,  # noqa: ANN401
     other_crs: Any,  # noqa: ANN401
-) -> tuple[float, float]:
+) -> tuple[float | np.ndarray, float | np.ndarray]:
     """Transform coordinate tuple from a given to another projection.
 
     Parameters
     ----------
-    x: float
+    x: float | np.ndarray
         X coordinate.
-    y: float
+    y: float | np.ndarray
         Y coordinate.
     this_crs: Any
         CRS of the input coordinates. A projection definition
@@ -279,9 +279,9 @@ def transform_coords(
 
     Returns
     -------
-    float
+    float | np.ndarray
         X coordinate in the target projection.
-    float
+    float | np.ndarray
         Y coordinate in the target projection.
 
     """
@@ -290,15 +290,15 @@ def transform_coords(
 
 
 def xy2ij(
-    x: float, y: float, geotrans: tuple, origin: str = "ul"
+    x: float | np.ndarray, y: float | np.ndarray, geotrans: tuple, origin: str = "ul"
 ) -> tuple[int | np.ndarray, int | np.ndarray]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
     Parameters
     ----------
-    x : float or np.array
+    x : float | np.ndarray
         World system coordinate(s) in X direction.
-    y : float or np.array
+    y : float | np.ndarray
         World system coordinate(s) in Y direction.
     geotrans : 6-tuple
         GDAL geo-transformation parameters/dictionary.
@@ -312,9 +312,9 @@ def xy2ij(
 
     Returns
     -------
-    i : int or np.ndarray
+    i : int | np.ndarray
         Column number(s) in pixels.
-    j : int or np.ndarray
+    j : int | np.ndarray
         Row number(s) in pixels.
 
     """
@@ -371,7 +371,7 @@ def xy2ij(
 
 
 def ij2xy(
-    i: int, j: int, geotrans: tuple, origin: str = "ul"
+    i: int | np.ndarray, j: int | np.ndarray, geotrans: tuple, origin: str = "ul"
 ) -> tuple[float | np.ndarray, float | np.ndarray]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
@@ -407,7 +407,7 @@ def ij2xy(
         "c": (0.5, 0.5),
     }
 
-    px_shift = px_shift_map.get(origin)
+    px_shift = cast("tuple[int | float, int | float]", px_shift_map.get(origin))
     if px_shift is None:
         wrng_msg = (
             "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead"
@@ -417,12 +417,12 @@ def ij2xy(
         px_shift = (0, 0)
 
     # shift pixel coordinates to the desired pixel origin
-    i += px_shift[0]
-    j += px_shift[1]
+    i_ori = i + px_shift[0]
+    j_ori = j + px_shift[1]
 
     # applying affine model: https://gdal.org/user/raster_data_model.html
-    x = geotrans[0] + i * geotrans[1] + j * geotrans[2]
-    y = geotrans[3] + i * geotrans[4] + j * geotrans[5]
+    x = geotrans[0] + i_ori * geotrans[1] + j_ori * geotrans[2]
+    y = geotrans[3] + i_ori * geotrans[4] + j_ori * geotrans[5]
 
     return x, y
 

@@ -30,7 +30,7 @@
 
 from collections.abc import Generator
 from enum import Enum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import numpy as np
 import shapely
@@ -58,14 +58,31 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     extent: tuple[float, float, float, float]
     sampling: NonNegativeFloat
     tile_shape: tuple[NonNegativeFloat, NonNegativeFloat]
-    tiling_level: int | None = 0
-    axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] | None = ("E", "N")
+    tiling_level: int = 0
+    axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N")
 
     _tm: TileMatrix
 
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
+    def __init__(  # noqa: PLR0913
+        self,
+        name: str,
+        extent: tuple[float, float, float, float],
+        sampling: NonNegativeFloat,
+        tile_shape: tuple[NonNegativeFloat, NonNegativeFloat],
+        tiling_level: int | None = 0,
+        axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N"),
+        **kwargs: dict[str, Any],
+    ) -> None:
         """Initialise regular tiling object."""
-        super().__init__(**kwargs)
+        super().__init__(
+            name=name,
+            extent=extent,
+            sampling=sampling,
+            tile_shape=tile_shape,
+            tiling_level=tiling_level,
+            axis_orientation=axis_orientation,
+            **kwargs,
+        )
 
         tile_width, tile_height = (
             int(self.tile_shape[0] / self.sampling),
@@ -81,7 +98,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=self.corner_of_origin,
+            cornerOfOrigin=self.corner_of_origin.value,
             pointOfOrigin=self.origin_xy,
             tileWidth=tile_width,
             tileHeight=tile_height,
@@ -116,9 +133,9 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     def corner_of_origin(self) -> CornerOfOrigin:
         """Corner of origin of the tiling."""
         return (
-            CornerOfOrigin.bottom_left.value
+            CornerOfOrigin.bottom_left
             if self.axis_orientation[1] == "N"
-            else CornerOfOrigin.top_left.value
+            else CornerOfOrigin.top_left
         )
 
     @property
@@ -126,7 +143,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         """Origin of the tiling."""
         return (
             (self.extent[0], self.extent[3])
-            if self.corner_of_origin == CornerOfOrigin.top_left.value
+            if self.corner_of_origin == CornerOfOrigin.top_left
             else (self.extent[0], self.extent[1])
         )
 
@@ -174,7 +191,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
 
         return sorted(samplings)
 
-    def __iter__(self) -> Generator[RegularTile, RegularTile, RegularTile]:
+    def items(self) -> Generator[RegularTile]:
         """Iterate over tiles in the tiling."""
         for x in range(self._tm.matrixWidth):
             for y in range(self._tm.matrixHeight):
@@ -220,13 +237,31 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     adjacency_matrix: Annotated[
         np.ndarray | None, AfterValidator(validate_adj_matrix)
     ] = None
-    tiling_level: int | None = 0
+    tiling_level: int = 0
 
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
+    _adjacency_matrix: np.ndarray
+
+    def __init__(
+        self,
+        /,
+        name: str,
+        tiles: dict[str, IrregularTile],
+        adjacency_matrix: np.ndarray | None = None,
+        tiling_level: int = 0,
+        **kwargs: dict[str, Any],
+    ) -> None:
         """Initialise irregular tiling object."""
-        super().__init__(**kwargs)
+        super().__init__(
+            name=name,
+            tiles=tiles,
+            adjacency_matrix=adjacency_matrix,
+            tiling_level=tiling_level,
+            **kwargs,
+        )
         if self.adjacency_matrix is None:
-            self.adjacency_matrix = self._build_adjacency_matrix()
+            self._adjacency_matrix = self._build_adjacency_matrix()
+        else:
+            self._adjacency_matrix = cast("np.ndarray", adjacency_matrix)
 
     @property
     def tile_ids(self) -> list[str]:
@@ -248,7 +283,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         """
         tile_idx = self.tile_ids.index(tile_id)
-        nbr_idxs = self.adjacency_matrix[tile_idx, :]
+        nbr_idxs = self._adjacency_matrix[tile_idx, :]
 
         return [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
@@ -297,7 +332,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         return adjacency_matrix
 
-    def __iter__(self) -> Generator[IrregularTile, IrregularTile, IrregularTile]:
+    def items(self) -> Generator[IrregularTile]:
         """Yield one tile after the other."""
         yield from self.tiles.values()
 

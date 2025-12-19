@@ -30,7 +30,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import orjson
 from pydantic import BaseModel, TypeAdapter
@@ -54,19 +54,19 @@ class RegularGrid(BaseModel, extra="allow"):
 
     """
 
-    _proj_defs: dict[int, ProjSystemDefinition] | None = None
-    _tiling_defs: dict[int, RegularTilingDefinition] | None = None
+    _proj_defs: dict[int, ProjSystemDefinition]
+    _tiling_defs: dict[int, RegularTilingDefinition]
 
     _rpts_cls = RegularProjTilingSystem
 
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
+    def __init__(self, **rpts: RegularProjTilingSystem) -> None:
         """Initialise a regular grid object."""
-        super().__init__(**kwargs)
+        super().__init__(**rpts)
 
     @staticmethod
     def _create_rpts_from_def(
         proj_def: ProjSystemDefinition,
-        sampling: float | dict[int | str, float | int],
+        sampling: float | dict[int, float | int],
         tiling_defs: dict[int, RegularTilingDefinition],
     ) -> RegularProjTilingSystem:
         """Create regular projected tiling system from grid definitions.
@@ -200,11 +200,7 @@ class RegularGrid(BaseModel, extra="allow"):
 
     def _fetch_mod_grid_def(
         self,
-    ) -> tuple[
-        dict[str, ProjSystemDefinition],
-        dict[int, RegularTilingDefinition],
-        dict[int, list[float | int]],
-    ]:
+    ) -> tuple[dict[str, ProjSystemDefinition], dict[int, RegularTilingDefinition]]:
         """Create regular grid system definitions.
 
         Create required regular tiling system definitions from the tiling systems
@@ -224,7 +220,7 @@ class RegularGrid(BaseModel, extra="allow"):
         to the sampling of the current regular grid instance.
 
         """
-        rpts_defs = {}
+        proj_defs = {}
         tiling_defs = {}
         ref_tiling_level = None
         rtps_names = list(self.model_dump().keys())
@@ -238,14 +234,14 @@ class RegularGrid(BaseModel, extra="allow"):
                         name=rpts[tiling_level].name, tile_shape=tile_shape
                     )
                     tiling_defs[tiling_level] = tiling_def
-            rpts_defs[name] = ProjSystemDefinition(
+            proj_defs[name] = ProjSystemDefinition(
                 name=name,
                 crs=rpts.crs,
                 extent=rpts[ref_tiling_level].extent,
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
             )
 
-        return rpts_defs, tiling_defs
+        return proj_defs, tiling_defs
 
     def to_grid_def(self, json_path: Path) -> None:
         """Write the regular grid definition to a JSON file.
@@ -256,10 +252,11 @@ class RegularGrid(BaseModel, extra="allow"):
             Path to JSON file, where the grid definition should be stored.
 
         """
-        if not self._proj_defs:
+        if self._proj_defs is not None and self._tiling_defs is not None:
             proj_defs, tiling_defs = self._fetch_mod_grid_def()
         else:
-            proj_defs, tiling_defs = self._proj_defs, self._tiling_defs
+            proj_defs = cast("dict[str, ProjSystemDefinition]", self._proj_defs)
+            tiling_defs = cast("dict[int, RegularTilingDefinition]", self._tiling_defs)
 
         write_grid_def(json_path, proj_defs, tiling_defs)
 

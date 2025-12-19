@@ -20,11 +20,11 @@ from pytileproj.tiling_system import (
 def e7eu_grid_t1():
     return RegularTiling(
         name="e7eut1",
-        extent=[0, 0, 8_660_000, 6_020_000],
+        extent=(0, 0, 8_660_000, 6_020_000),
         sampling=10,
         tile_shape=(100_000, 100_000),
         tiling_level=1,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
 
 
@@ -32,11 +32,11 @@ def e7eu_grid_t1():
 def e7eu_grid_t3():
     return RegularTiling(
         name="e7eut3",
-        extent=[0, 0, 8_660_000, 6_020_000],
+        extent=(0, 0, 8_660_000, 6_020_000),
         sampling=20,
         tile_shape=(300_000, 300_000),
         tiling_level=0,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
 
 
@@ -44,11 +44,11 @@ def e7eu_grid_t3():
 def e7eu_grid_invalid():
     return RegularTiling(
         name="e7_invalid",
-        extent=[0, 0, 300_000, 300_000],
+        extent=(0, 0, 300_000, 300_000),
         sampling=20,
         tile_shape=(300_000, 300_000),
         tiling_level=2,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
 
 
@@ -105,19 +105,19 @@ def test_gridsystembase(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling
 
 def test_projgridsystembase_tile(e7eu_psb: ProjTilingSystem):
     e7_tile = RasterTile.from_extent(
-        [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
+        (3700000, 2300000, 3800000, 2400000), 27704, 10, 10
     )
-    assert e7_tile in e7eu_psb
+    assert e7_tile.boundary in e7eu_psb
 
 
 def test_projgridsystembase_mask(e7eu_psb: ProjTilingSystem):
     e7_tile = RasterTile.from_extent(
-        [3700000, 2300000, 3800000, 2400000], 27704, 10, 10
+        (3700000, 2300000, 3800000, 2400000), 27704, 10, 10
     )
     tile_mask = e7eu_psb.get_tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.ones((10000, 10000)))
 
-    e7_tile = RasterTile.from_extent([0, 0, 100000, 100000], 27704, 10, 10)
+    e7_tile = RasterTile.from_extent((0, 0, 100000, 100000), 27704, 10, 10)
     tile_mask = e7eu_psb.get_tile_mask(e7_tile)
     assert np.array_equal(tile_mask, np.zeros((10000, 10000)))
 
@@ -171,11 +171,11 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
 
     new_grid = RegularTiling(
         name="e7eut2",
-        extent=[0, 0, 8_660_000, 6_020_000],
+        extent=(0, 0, 8_660_000, 6_020_000),
         sampling=20,
         tile_shape=(200_000, 200_000),
         tiling_level=1,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
     rpts = RegularProjTilingSystem(
         name="e7eu",

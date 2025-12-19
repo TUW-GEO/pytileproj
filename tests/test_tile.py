@@ -167,7 +167,7 @@ def test_coord_conversion(ref_proj_tile: RasterTile):
     c_0 = random.randint(0, ref_proj_tile.n_cols)  # noqa: S311
 
     x, y = ref_proj_tile.rc2xy(r_0, c_0)
-    r, c = ref_proj_tile.xy2rc(x, y)
+    r, c = ref_proj_tile.xy2rc(float(x), float(y))
 
     assert (r_0, c_0) == (r, c)
 
@@ -202,7 +202,7 @@ def test_plot(ref_proj_tile: RasterTile):
     )
 
     # test plotting with different input projection
-    extent = [527798, 94878, 956835, 535687]
+    extent = (527798, 94878, 956835, 535687)
     proj_tile = RasterTile.from_extent(extent, 3857, x_pixel_size=500, y_pixel_size=500)
     proj_tile.plot(add_country_borders=True)
 

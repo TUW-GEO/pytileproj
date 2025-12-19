@@ -28,8 +28,8 @@
 
 """Tile module defining regular and irregular tiles."""
 
-from collections.abc import Sequence
-from typing import Any, Union
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Union, cast
 
 import numpy as np
 import orjson
@@ -40,6 +40,7 @@ from pydantic import BaseModel, NonNegativeInt
 from shapely.geometry import Polygon
 
 from pytileproj._const import DECIMALS, JSON_INDENT, VIS_INSTALLED
+from pytileproj._types import Extent
 from pytileproj.projgeom import (
     ProjGeom,
     ij2xy,
@@ -53,9 +54,11 @@ from pytileproj.projgeom import (
 if VIS_INSTALLED:
     import cartopy
     import cartopy.feature
-    import matplotlib.axes as mplax
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as PolygonPatch
+
+    if TYPE_CHECKING:
+        from cartopy.mpl.geoaxes import GeoAxes
 
 
 __all__ = ["RasterTile"]
@@ -64,15 +67,17 @@ __all__ = ["RasterTile"]
 class IrregularTile(BaseModel):
     """Defines an irregular tile (arbitrary extent) at a specific zoom/tiling level."""
 
-    id: str
+    name: str
     z: int
-    extent: tuple[float, float, float, float]
+    extent: Extent
 
     _boundary: shapely.Polygon
 
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self, /, name: str, z: int, extent: Extent, **kwargs: dict[str, Any]
+    ) -> None:
         """Initialise irrengular tile object."""
-        super().__init__(**kwargs)
+        super().__init__(name=name, z=z, extent=extent, **kwargs)
 
         min_x, min_y, max_x, max_y = self.extent
         self._boundary = shapely.Polygon(
@@ -109,12 +114,12 @@ def _align_geom():  # noqa: ANN202
 
     """
 
-    def decorator(f: callable, *args, **kwargs) -> callable:  # noqa: ARG001, ANN002, ANN003, D417
+    def decorator(f: Callable, *args, **kwargs) -> Callable:  # noqa: ARG001, ANN002, ANN003, D417
         """Call wrapper function.
 
         Parameters
         ----------
-        f : callable
+        f : Callable
             Function to wrap around/execute.
 
         Returns
@@ -154,7 +159,7 @@ class RasterTile(BaseModel):
     crs: Any
     n_rows: NonNegativeInt
     n_cols: NonNegativeInt
-    geotrans: tuple[float, float, float, float, float, float] | None = (
+    geotrans: tuple[float, float, float, float, float, float] = (
         0,
         1,
         0,
@@ -162,32 +167,54 @@ class RasterTile(BaseModel):
         0,
         -1,
     )
-    px_origin: str | None = "ul"
+    px_origin: str = "ul"
     name: str | None = None
 
     _boundary: ProjGeom
     _crs: pyproj.CRS
 
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
+    def __init__(  # noqa: PLR0913
+        self,
+        crs: Any,  # noqa: ANN401
+        n_rows: NonNegativeInt,
+        n_cols: NonNegativeInt,
+        geotrans: tuple[float, float, float, float, float, float] = (
+            0,
+            1,
+            0,
+            0,
+            0,
+            -1,
+        ),
+        px_origin: str = "ul",
+        name: str | None = None,
+    ) -> None:
         """Initialise raster tile object."""
-        super().__init__(**kwargs)
+        super().__init__(
+            crs=crs,
+            n_rows=n_rows,
+            n_cols=n_cols,
+            geotrans=geotrans,
+            px_origin=px_origin,
+            name=name,
+        )
         self._crs = pyproj.CRS.from_user_input(self.crs)
         self._boundary = self.__proj_geom_boundary()
 
     @classmethod
-    def from_extent(  # noqa: D417
+    def from_extent(
         cls,
-        extent: tuple[float, float, float, float],
+        extent: Extent,
         crs: Any,  # noqa: ANN401
-        x_pixel_size: int,
-        y_pixel_size: int,
-        **kwargs: dict[str, Any],
+        x_pixel_size: float,
+        y_pixel_size: float,
+        name: str | None = None,
     ) -> "RasterTile":
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
         ----------
-        extent: tuple[float, float, float, float]
+        extent: Extent
             Tile extent (x_min, y_min, x_max, y_max).
         crs: Any
             A projection definition pyproj.CRS can handle.
@@ -195,6 +222,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in X.
         y_pixel_size: int
             Pixel size in units of the projection in Y.
+        name: str | None, optional
+            Name of the raster tile.
 
         Returns
         -------
@@ -209,15 +238,15 @@ class RasterTile(BaseModel):
         ul_x, ul_y = ll_x, ll_y + n_rows * y_pixel_size
         geotrans = (ul_x, x_pixel_size, 0, ul_y, 0, -y_pixel_size)
 
-        return cls(n_rows=n_rows, n_cols=n_cols, crs=crs, geotrans=geotrans, **kwargs)
+        return cls(n_rows=n_rows, n_cols=n_cols, crs=crs, geotrans=geotrans, name=name)
 
     @classmethod
-    def from_geometry(  # noqa: D417
+    def from_geometry(
         cls,
         proj_geom: ProjGeom,
         x_pixel_size: float,
         y_pixel_size: float,
-        **kwargs: dict[str, Any],
+        name: str | None = None,
     ) -> "RasterTile":
         """Create a raster tile object from an existing geometry object.
 
@@ -233,6 +262,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in X.
         y_pixel_size : float
             Pixel size in units of the projection in Y.
+        name: str | None, optional
+            Name of the raster tile.
 
         Returns
         -------
@@ -247,7 +278,11 @@ class RasterTile(BaseModel):
         """
         geom_ch = shapely.convex_hull(proj_geom.geom)
         return cls.from_extent(
-            geom_ch.bounds, proj_geom.crs, x_pixel_size, y_pixel_size, **kwargs
+            geom_ch.bounds,
+            proj_geom.crs,
+            x_pixel_size,
+            y_pixel_size,
+            name=name,
         )
 
     @classmethod
@@ -299,49 +334,67 @@ class RasterTile(BaseModel):
     @property
     def ll_x(self) -> float:
         """X coordinate of the lower left corner."""
-        x, _ = self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin)
+        x, _ = tuple(
+            map(float, self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin))
+        )
         return x
 
     @property
     def ll_y(self) -> float:
         """Y coordinate of the lower left corner."""
-        _, y = self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin)
+        _, y = tuple(
+            map(float, self.rc2xy(self.n_rows - 1, 0, px_origin=self.px_origin))
+        )
         return y
 
     @property
     def ul_x(self) -> float:
         """X coordinate of the upper left corner."""
-        x, _ = self.rc2xy(0, 0, px_origin=self.px_origin)
+        x, _ = tuple(map(float, self.rc2xy(0, 0, px_origin=self.px_origin)))
         return x
 
     @property
     def ul_y(self) -> float:
         """Y coordinate of the upper left corner."""
-        _, y = self.rc2xy(0, 0, px_origin=self.px_origin)
+        _, y = tuple(map(float, self.rc2xy(0, 0, px_origin=self.px_origin)))
         return y
 
     @property
     def ur_x(self) -> float:
         """X coordinate of the upper right corner."""
-        x, _ = self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin)
+        x, _ = tuple(
+            map(float, self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin))
+        )
         return x
 
     @property
     def ur_y(self) -> float:
         """Y coordinate of the upper right corner."""
-        _, y = self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin)
+        _, y = tuple(
+            map(float, self.rc2xy(0, self.n_cols - 1, px_origin=self.px_origin))
+        )
         return y
 
     @property
     def lr_x(self) -> float:
         """X coordinate of the upper right corner."""
-        x, _ = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin)
+        x, _ = tuple(
+            map(
+                float,
+                self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin),
+            )
+        )
         return x
 
     @property
     def lr_y(self) -> float:
         """Y coordinate of the upper right corner."""
-        _, y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin)
+        _, y = tuple(
+            map(
+                float,
+                self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin=self.px_origin),
+            )
+        )
         return y
 
     @property
@@ -427,10 +480,12 @@ class RasterTile(BaseModel):
         (min_x, min_y, max_x, max_y).
 
         """
-        ll_x, ll_y = self.rc2xy(self.n_rows - 1, 0, px_origin="ll")
-        ur_x, ur_y = self.rc2xy(0, self.n_cols - 1, px_origin="ur")
-        lr_x, lr_y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr")
-        ul_x, ul_y = self.rc2xy(0, 0, px_origin="ul")
+        ll_x, ll_y = tuple(map(float, self.rc2xy(self.n_rows - 1, 0, px_origin="ll")))
+        ur_x, ur_y = tuple(map(float, self.rc2xy(0, self.n_cols - 1, px_origin="ur")))
+        lr_x, lr_y = tuple(
+            map(float, self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr"))
+        )
+        ul_x, ul_y = tuple(map(float, self.rc2xy(0, 0, px_origin="ul")))
         return (
             min([ll_x, ul_x]),
             min([ll_y, lr_y]),
@@ -464,10 +519,12 @@ class RasterTile(BaseModel):
         (lower left, lower right, upper right, upper left).
 
         """
-        ll_x, ll_y = self.rc2xy(self.n_rows - 1, 0, px_origin="ll")
-        ur_x, ur_y = self.rc2xy(0, self.n_cols - 1, px_origin="ur")
-        lr_x, lr_y = self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr")
-        ul_x, ul_y = self.rc2xy(0, 0, px_origin="ul")
+        ll_x, ll_y = tuple(map(float, self.rc2xy(self.n_rows - 1, 0, px_origin="ll")))
+        ur_x, ur_y = tuple(map(float, self.rc2xy(0, self.n_cols - 1, px_origin="ur")))
+        lr_x, lr_y = tuple(
+            map(float, self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr"))
+        )
+        ul_x, ul_y = tuple(map(float, self.rc2xy(0, 0, px_origin="ul")))
         return ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
 
     @property
@@ -500,7 +557,7 @@ class RasterTile(BaseModel):
             max_x, _ = self.rc2xy(0, self.n_cols)
             return np.arange(min_x, max_x, self.x_pixel_size)
         cols = np.array(range(self.n_cols))
-        return self.rc2xy(0, cols)[0]
+        return np.array(self.rc2xy(0, cols)[0])
 
     @property
     def y_coords(self) -> np.ndarray:
@@ -510,10 +567,10 @@ class RasterTile(BaseModel):
             _, max_y = self.rc2xy(0, 0)
             return np.arange(max_y, min_y, -self.y_pixel_size)
         rows = np.array(range(self.n_rows))
-        return self.rc2xy(rows, 0)[1]
+        return np.array(self.rc2xy(rows, 0)[1])
 
     @property
-    def xy_coords(self) -> tuple[np.ndarray, np.ndarray]:
+    def xy_coords(self) -> tuple[np.ndarray | int | float, np.ndarray | int | float]:
         """Return meshgrid of both X and Y coordinates."""
         if self.is_axis_parallel:
             x_coords, y_coords = np.meshgrid(
@@ -617,20 +674,20 @@ class RasterTile(BaseModel):
 
     def xy2rc(
         self,
-        x: float,
-        y: float,
+        x: float | np.ndarray,
+        y: float | np.ndarray,
         crs: Any = None,  # noqa: ANN401
         px_origin: str | None = None,
-    ) -> tuple[int, int]:
+    ) -> tuple[int | np.ndarray, int | np.ndarray]:
         """Convert world system to pixels coordinates.
 
         Calculate an index of a pixel in which a given point of a world system lies.
 
         Parameters
         ----------
-        x : float
+        x : float | np.ndarray
             World system coordinate in X direction.
-        y : float
+        y : float | np.ndarray
             World system coordinate in Y direction.
         crs: Any
             CRS of `x` and `y`. A projection definition pyproj.CRS can handle.
@@ -645,9 +702,9 @@ class RasterTile(BaseModel):
 
         Returns
         -------
-        int
+        int | np.ndarray
             Pixel row number.
-        int
+        int | np.ndarray
             Pixel column number.
 
         Notes
@@ -662,8 +719,8 @@ class RasterTile(BaseModel):
         return r, c
 
     def rc2xy(
-        self, r: int, c: int, px_origin: str | None = None
-    ) -> tuple[float, float]:
+        self, r: int | np.ndarray, c: int | np.ndarray, px_origin: str | None = None
+    ) -> tuple[float | np.ndarray, float | np.ndarray]:
         """Convert pixels to world system coordinates.
 
         Returns the coordinates of the center or a corner (depending on
@@ -671,9 +728,9 @@ class RasterTile(BaseModel):
 
         Parameters
         ----------
-        r : int
+        r : int | np.ndarray
             Pixel row number.
-        c : int
+        c : int | np.ndarray
             Pixel column number.
         px_origin : str, optional
             Defines the world system origin of the pixel. It can be:
@@ -686,9 +743,9 @@ class RasterTile(BaseModel):
 
         Returns
         -------
-        float
+        float | np.ndarray
             World system coordinate in X direction.
-        float
+        float | np.ndarray
             World system coordinate in Y direction.
 
         """
@@ -698,7 +755,7 @@ class RasterTile(BaseModel):
     def plot(  # noqa: PLR0913
         self,
         *,
-        ax: Union["mplax.Axes", None] = None,
+        ax: Union["GeoAxes", None] = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
         edgewidth: float = 1,
@@ -707,14 +764,14 @@ class RasterTile(BaseModel):
         show: bool = False,
         label_tile: bool = False,
         add_country_borders: bool = True,
-        extent: tuple | None = None,
+        extent: Extent | None = None,
         extent_proj: Any = None,  # noqa: ANN401
-    ) -> "mplax.Axes":
+    ) -> "GeoAxes":
         """Plot the boundary of the raster tile on a map.
 
         Parameters
         ----------
-        ax : matplotlib.pyplot.axes
+        ax : GeoAxes
             Pre-defined Matplotlib axis.
         facecolor : str, optional
             Color code as described at:
@@ -770,7 +827,7 @@ class RasterTile(BaseModel):
         )
 
         if ax is None:
-            ax = plt.axes(projection=other_proj)
+            ax = cast("GeoAxes", plt.axes(projection=other_proj))
             ax.set_global()
             ax.gridlines()
 
@@ -802,8 +859,8 @@ class RasterTile(BaseModel):
             )
             min_x, min_y = transform_coords(extent[0], extent[1], src_crs, dst_crs)
             max_x, max_y = transform_coords(extent[2], extent[3], src_crs, dst_crs)
-            ax.set_xlim([min_x, max_x])
-            ax.set_ylim([min_y, max_y])
+            ax.set_xlim((float(min_x), float(max_x)))
+            ax.set_ylim((float(min_y), float(max_y)))
 
         if self.name is not None and label_tile:
             transform = this_proj._as_mpl_transform(ax)  # noqa: SLF001
@@ -842,14 +899,14 @@ class RasterTile(BaseModel):
         """
         return bool(shapely.within(other.geom, self._boundary.geom))
 
-    def __hash__(self) -> str:
+    def __hash__(self) -> int:
         """Return class hash."""
         this_corners = np.around(
             np.array(self.outer_boundary_corners), decimals=DECIMALS
         )
         return hash((this_corners, self.n_rows, self.n_cols))
 
-    def __eq__(self, other: "RasterTile") -> bool:
+    def __eq__(self, other: object) -> bool:
         """Check if this and another raster tile are equal.
 
         Equality holds true if the vertices, rows and columns are the same.
@@ -865,6 +922,7 @@ class RasterTile(BaseModel):
             True if both raster tiles are the same, otherwise false.
 
         """
+        other = cast("RasterTile", other)
         this_corners = np.around(
             np.array(self.outer_boundary_corners), decimals=DECIMALS
         )
@@ -877,7 +935,7 @@ class RasterTile(BaseModel):
             and self.n_cols == other.n_cols
         )
 
-    def __ne__(self, other: "RasterTile") -> bool:
+    def __ne__(self, other: object) -> bool:
         """Check if this and another raster tile are not equal.
 
         Non-equality holds true if the vertices, rows or columns differ.
@@ -898,29 +956,6 @@ class RasterTile(BaseModel):
     def __str__(self) -> str:
         """Representation of a raster tile as a Well Known Text (WKT) string."""
         return self.boundary_wkt
-
-    def __deepcopy__(self, memo: dict) -> "RasterTile":
-        """Deepcopy method of a raster tile object.
-
-        Parameters
-        ----------
-        memo : dict
-            Variable storage for deepcopy method.
-
-        Returns
-        -------
-        RasterTile
-            Deepcopy of a raster tile.
-
-        """
-        return RasterTile(
-            crs=self.crs,
-            n_rows=self.n_rows,
-            n_cols=self.n_cols,
-            geotrans=self.geotrans,
-            px_origin=self.px_origin,
-            name=self.name,
-        )
 
 
 if __name__ == "__main__":

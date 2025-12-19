@@ -30,13 +30,13 @@ def rpts_defs():
         "e7eu": ProjSystemDefinition(
             name="e7eu",
             crs=27704,
-            extent=[0, 0, 8_660_000, 6_020_000],
+            extent=(0, 0, 8_660_000, 6_020_000),
             axis_orientation=("E", "S"),
         ),
         "e7af": ProjSystemDefinition(
             name="e7af",
             crs=27701,
-            extent=[0, 0, 12_000_000, 9_600_000],
+            extent=(0, 0, 12_000_000, 9_600_000),
             axis_orientation=("E", "S"),
         ),
     }
@@ -46,11 +46,11 @@ def rpts_defs():
 def e7eu_grid_t1():
     return RegularTiling(
         name="t1",
-        extent=[0, 0, 8_660_000, 6_020_000],
+        extent=(0, 0, 8_660_000, 6_020_000),
         sampling=10,
         tile_shape=(100_000, 100_000),
         tiling_level=1,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
 
 
@@ -58,11 +58,11 @@ def e7eu_grid_t1():
 def e7af_grid_t1():
     return RegularTiling(
         name="t1",
-        extent=[0, 0, 12_000_000, 9_600_000],
+        extent=(0, 0, 12_000_000, 9_600_000),
         sampling=10,
         tile_shape=(100_000, 100_000),
         tiling_level=1,
-        axis_orientation=["E", "S"],
+        axis_orientation=("E", "S"),
     )
 
 
@@ -103,7 +103,7 @@ def test_io_file(e7grid: RegularGrid):
 
 
 def test_from_sampling(
-    rpts_defs: dict[str, RegularTilingDefinition],
+    rpts_defs: dict[str, ProjSystemDefinition],
     tiling_defs: dict[int, RegularTilingDefinition],
     e7grid: RegularGrid,
 ):
@@ -113,7 +113,7 @@ def test_from_sampling(
 
 
 def test_tiling_defs_multi(
-    rpts_defs: dict[str, RegularTilingDefinition],
+    rpts_defs: dict[str, ProjSystemDefinition],
     tiling_defs_multi: dict[int, RegularTilingDefinition],
 ):
     e7grid_to_def = RegularGrid.from_sampling(10, rpts_defs, tiling_defs_multi)
@@ -128,7 +128,7 @@ def test_tiling_defs_multi(
 
 
 def test_tiling_defs_multi_sampling_diff(
-    rpts_defs: dict[str, RegularTilingDefinition],
+    rpts_defs: dict[str, ProjSystemDefinition],
     tiling_defs_multi: dict[int, RegularTilingDefinition],
 ):
     e7grid = RegularGrid.from_sampling(10, rpts_defs, tiling_defs_multi)
@@ -144,7 +144,7 @@ def test_tiling_defs_multi_sampling_diff(
 
 
 def test_tiling_defs_multi_io(
-    rpts_defs: dict[str, RegularTilingDefinition],
+    rpts_defs: dict[str, ProjSystemDefinition],
     tiling_defs_multi: dict[int, RegularTilingDefinition],
 ):
     e7grid = RegularGrid.from_sampling(10, rpts_defs, tiling_defs_multi)
@@ -159,6 +159,7 @@ def test_tiling_defs_multi_io(
     json_path.unlink()
 
     len_tiling_defs = 2
+    assert e7grid_from_def._tiling_defs is not None  # noqa: SLF001
     assert len(e7grid_from_def._tiling_defs) == len_tiling_defs  # noqa: SLF001
 
 
