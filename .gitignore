@@ -44,8 +44,17 @@ sdist/*
 docs/api/*
 docs/_rst/*
 docs/_build/*
+docs/apidocs/*
 cover/*
 MANIFEST
 
 # Per-project virtualenvs
+# Per-project virtualenvs
 .venv*/
+venv
+uv.lock
+
+.scripts
+
+# MyST build outputs
+_build
