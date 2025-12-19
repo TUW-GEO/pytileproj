@@ -36,7 +36,13 @@ import numpy as np
 import shapely
 from morecantile.models import Tile as RegularTile
 from morecantile.models import TileMatrix
-from pydantic import AfterValidator, BaseModel, NonNegativeFloat, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    NonNegativeFloat,
+    PrivateAttr,
+    model_validator,
+)
 from shapely.geometry import Polygon
 
 from pytileproj._types import IrregTileGenerator, RegTileGenerator
@@ -62,7 +68,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     tiling_level: int = 0
     axis_orientation: tuple[Literal["W", "E"], Literal["N", "S"]] = ("E", "N")
 
-    _tm: TileMatrix
+    _tm: TileMatrix = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the regular tiling object."""
@@ -223,11 +229,15 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     ] = None
     tiling_level: int = 0
 
+    _adjacency_matrix: np.ndarray = PrivateAttr()
+
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the irregular tiling object."""
         super().model_post_init(context)
         if self.adjacency_matrix is None:
-            self.adjacency_matrix = self._build_adjacency_matrix()
+            self._adjacency_matrix = self._build_adjacency_matrix()
+        else:
+            self._adjacency_matrix = self.adjacency_matrix
 
     @property
     def tile_ids(self) -> list[str]:
@@ -249,7 +259,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         """
         tile_idx = self.tile_ids.index(tile_id)
-        nbr_idxs = self.adjacency_matrix[tile_idx, :]
+        nbr_idxs = self._adjacency_matrix[tile_idx, :]
 
         return [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 

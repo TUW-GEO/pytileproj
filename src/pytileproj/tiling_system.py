@@ -36,13 +36,14 @@ import numpy as np
 import orjson
 import pyproj
 import shapely
-from morecantile.models import CRS, TileMatrixSet
 from morecantile.models import Tile as RegularTile
+from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
     BaseModel,
     BeforeValidator,
     NonNegativeInt,
+    PrivateAttr,
     model_validator,
 )
 
@@ -51,7 +52,6 @@ from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj._types import (
     AnyTile,
     Extent,
-    PartialExtent,
     RasterTileGenerator,
     TileGenerator,
 )
@@ -94,9 +94,9 @@ __all__ = [
 
 
 def _tiling_access(f):  # noqa: ANN001, ANN202
-    def wrapper(self: "TilingSystem", *args: int, **kwargs: int) -> Any:  # noqa: ANN401
+    def wrapper(self: "TilingSystem", *args: int | str, **kwargs: int | str) -> Any:  # noqa: ANN401
         use_args = f.__name__ == "__getitem__"
-        tiling_id = cast("str | int", args[0] if use_args else kwargs.get("tiling_id"))
+        tiling_id = args[0] if use_args else kwargs.get("tiling_id")
         tiling_level = self.tiling_id_to_level(tiling_id)
 
         if use_args:
@@ -112,14 +112,15 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
 
     crs: Any
     proj_zone_geog: Annotated[
-        ProjGeom | None,
+        ProjGeom | Path | shapely.Geometry | None,
         BeforeValidator(convert_any_to_geog_geom),
     ] = None
 
-    _proj_zone: ProjGeom | None = None
-    _to_geog: pyproj.Transformer | None = None
-    _from_geog: pyproj.Transformer | None = None
-    _crs: pyproj.CRS | None = None
+    _proj_zone_geog: ProjGeom = PrivateAttr()
+    _proj_zone: ProjGeom = PrivateAttr()
+    _to_geog: pyproj.Transformer = PrivateAttr()
+    _from_geog: pyproj.Transformer = PrivateAttr()
+    _crs: pyproj.CRS = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the projection system object."""
@@ -131,18 +132,18 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
             geog_crs, self._crs, always_xy=True
         )
 
-        epsg = self._crs.to_epsg()
-        if self.proj_zone_geog is not None:
-            self.proj_zone_geog = cast("ProjGeom", self.proj_zone_geog)
-        elif epsg is not None:
-            self.proj_zone_geog = fetch_proj_zone(epsg)
+        if self.proj_zone_geog is None:
+            epsg = self._crs.to_epsg()
+            if epsg is not None:
+                self._proj_zone_geog = fetch_proj_zone(epsg)
+            else:
+                err_msg = "Could not extract projection zone boundaries."
+                raise ValueError(err_msg)
+            self.proj_zone_geog = self._proj_zone_geog
         else:
-            err_msg = "Could not extract projection zone boundaries."
-            raise ValueError(err_msg)
+            self._proj_zone_geog = cast("ProjGeom", self.proj_zone_geog)
 
-        proj_zone_faulty = transform_geometry(
-            cast("ProjGeom", self.proj_zone_geog), self.crs
-        )
+        proj_zone_faulty = transform_geometry(self._proj_zone_geog, self.crs)
         # buffer of 0 removes wrap-arounds along the anti-meridian
         proj_zone = shapely.buffer(proj_zone_faulty.geom, 0)
         self._proj_zone = ProjGeom(geom=proj_zone, crs=self._crs)
@@ -170,7 +171,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     @property
     def pyproj_crs(self) -> pyproj.CRS:
         """Return PyProj representation of CRS."""
-        return cast("pyproj.CRS", self._crs)
+        return self._crs
 
     @property
     def unit(self) -> str:
@@ -202,7 +203,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         coord = None
         if self._lonlat_inside_proj(lon, lat):
             x, y = self._from_geog.transform(lon, lat)
-            coord = ProjCoord(x, y, cast("pyproj.CRS", self._crs))
+            coord = ProjCoord(x, y, self._crs)
         else:
             raise GeomOutOfZoneError(shapely.Point((lon, lat)))
 
@@ -282,7 +283,7 @@ class TilingSystem(BaseModel):
     name: str
     tilings: dict[int, RegularTiling | IrregularTiling]
 
-    _tilings_map: dict = {}
+    _tilings_map: dict = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the tiling system object."""
@@ -951,7 +952,8 @@ class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
 
     name: str
     crs: Any
-    extent: PartialExtent | None = None
+    min_xy: tuple[int | float, int | float] | None = None
+    max_xy: tuple[int | float, int | float] | None = None
     proj_zone_geog: Annotated[
         ProjGeom | None,
         BeforeValidator(convert_any_to_geog_geom),
@@ -978,7 +980,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
     tilings: dict[int, RegularTiling]
 
-    _tms: TileMatrixSet
+    _tms: TileMatrixSet = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the regular projected tiling system."""
@@ -995,7 +997,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
     @staticmethod
     def _get_tiling_from_id(
         tiling_defs: dict[int, RegularTilingDefinition], tiling_id: int | str
-    ) -> tuple[int, RegularTilingDefinition]:
+    ) -> tuple[int | None, RegularTilingDefinition | None]:
         if isinstance(tiling_id, int):
             tiling_def = tiling_defs.get(tiling_id)
             tiling_level = tiling_id
@@ -1018,8 +1020,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
     def _get_extent_from_proj(
         proj_def: ProjSystemDefinition, tiling_def: RegularTilingDefinition
     ) -> Extent:
-        extent = proj_def.extent
-        if extent is None or None in extent:
+        if proj_def.max_xy is None or proj_def.min_xy is None:
             pyproj_crs = pyproj.CRS.from_user_input(proj_def.crs)
             epsg = pyproj_crs.to_epsg()
             if proj_def.proj_zone_geog is not None:
@@ -1029,25 +1030,23 @@ class RegularProjTilingSystem(ProjTilingSystem):
             else:
                 err_msg = "Could not extract projection zone boundaries."
                 raise ValueError(err_msg)
-            proj_zone = transform_geometry(cast("ProjGeom", proj_zone_geog), pyproj_crs)
+            proj_zone = transform_geometry(proj_zone_geog, pyproj_crs)
             proj_extent = proj_zone.geom.bounds
-            if extent is None:
-                min_x, min_y, max_x, max_y = proj_extent
-            else:
-                min_x, min_y, max_x, max_y = cast(
-                    "Extent",
-                    [
-                        proj_extent[i] if extent[i] is None else extent[i]
-                        for i in range(len(extent))
-                    ],
-                )
+            min_x, min_y = (
+                proj_extent[:2] if proj_def.min_xy is None else proj_def.min_xy
+            )
+            max_x, max_y = (
+                proj_extent[2:] if proj_def.max_xy is None else proj_def.max_xy
+            )
             x_size, y_size = max_x - min_x, max_y - min_y
             tile_shape = cast("tuple", tiling_def.tile_shape)
             x_size_mod = np.ceil(x_size / tile_shape[0]) * tile_shape[0]
             y_size_mod = np.ceil(y_size / tile_shape[1]) * tile_shape[1]
             dst_extent = (min_x, min_y, min_x + x_size_mod, min_y + y_size_mod)
         else:
-            dst_extent = cast("Extent", extent)
+            min_x, min_y = proj_def.min_xy
+            max_x, max_y = proj_def.max_xy
+            dst_extent = (min_x, min_y, max_x, max_y)
 
         return dst_extent
 
@@ -1353,7 +1352,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
             coord.x,
             coord.y,
             tiling_id,
-            geographic_crs=CRS(coord.crs.to_proj4()),
+            geographic_crs=coord.crs.to_proj4(),  # ty: ignore[invalid-argument-type]
         )
         tilename = self._tile_to_name(tile)
         return self._tile_to_raster_tile(tile, name=tilename)
@@ -1400,7 +1399,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         min_x, min_y, max_x, max_y = bbox
-        return self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
+        yield from self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
 
     @_tiling_access
     def get_tiles_in_geog_bbox(

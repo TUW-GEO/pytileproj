@@ -1,5 +1,3 @@
-from typing import cast
-
 import numpy as np
 import pytest
 from pydantic_core import ValidationError
@@ -73,7 +71,7 @@ def test_adj_matrix(irreg_tiling: IrregularTiling):
     adj_matrix = np.array(
         [[0, 0, 0, 1], [0, 0, 1, 1], [0, 1, 0, 1], [1, 1, 1, 0]], dtype=np.bool_
     )
-    assert np.array_equal(cast("np.ndarray", irreg_tiling.adjacency_matrix), adj_matrix)
+    assert np.array_equal(irreg_tiling._adjacency_matrix, adj_matrix)  # noqa: SLF001
 
 
 def test_neighbours(irreg_tiling: IrregularTiling):

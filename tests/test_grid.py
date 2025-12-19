@@ -30,13 +30,15 @@ def rpts_defs():
         "e7eu": ProjSystemDefinition(
             name="e7eu",
             crs=27704,
-            extent=(0, 0, 8_660_000, 6_020_000),
+            min_xy=(0, 0),
+            max_xy=(8_660_000, 6_020_000),
             axis_orientation=("E", "S"),
         ),
         "e7af": ProjSystemDefinition(
             name="e7af",
             crs=27701,
-            extent=(0, 0, 12_000_000, 9_600_000),
+            min_xy=(0, 0),
+            max_xy=(12_000_000, 9_600_000),
             axis_orientation=("E", "S"),
         ),
     }

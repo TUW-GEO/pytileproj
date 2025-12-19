@@ -36,7 +36,7 @@ import orjson
 import pyproj
 import shapely
 import shapely.wkt
-from pydantic import BaseModel, NonNegativeInt
+from pydantic import BaseModel, NonNegativeInt, PrivateAttr
 from shapely.geometry import Polygon
 
 from pytileproj._const import DECIMALS, JSON_INDENT, VIS_INSTALLED
@@ -71,7 +71,7 @@ class IrregularTile(BaseModel):
     z: int
     extent: Extent
 
-    _boundary: shapely.Polygon
+    _boundary: shapely.Polygon = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the irregular tile object."""
@@ -168,8 +168,8 @@ class RasterTile(BaseModel):
     px_origin: str = "ul"
     name: str | None = None
 
-    _boundary: ProjGeom
-    _crs: pyproj.CRS
+    _boundary: ProjGeom = PrivateAttr()
+    _crs: pyproj.CRS = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the raster tile object."""
@@ -742,7 +742,7 @@ class RasterTile(BaseModel):
         add_country_borders: bool = True,
         extent: Extent | None = None,
         extent_proj: Any = None,  # noqa: ANN401
-    ) -> "GeoAxes":
+    ) -> Union["GeoAxes", None]:
         """Plot the boundary of the raster tile on a map.
 
         Parameters
@@ -783,7 +783,7 @@ class RasterTile(BaseModel):
 
         Returns
         -------
-        matplotlib.pyplot.axes
+        GeoAxes
             Matplotlib axis containing a Cartopy map with the plotted raster tile
             boundary.
 
@@ -882,7 +882,7 @@ class RasterTile(BaseModel):
         )
         return hash((this_corners, self.n_rows, self.n_cols))
 
-    def __eq__(self, other: object) -> bool:
+    def __eq__(self, other: "RasterTile") -> bool:  # ty: ignore[invalid-method-override]
         """Check if this and another raster tile are equal.
 
         Equality holds true if the vertices, rows and columns are the same.
@@ -898,7 +898,6 @@ class RasterTile(BaseModel):
             True if both raster tiles are the same, otherwise false.
 
         """
-        other = cast("RasterTile", other)
         this_corners = np.around(
             np.array(self.outer_boundary_corners), decimals=DECIMALS
         )

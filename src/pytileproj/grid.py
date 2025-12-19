@@ -30,10 +30,9 @@
 
 import json
 from pathlib import Path
-from typing import cast
 
 import orjson
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
 from pytileproj.tiling import RegularTiling
@@ -54,8 +53,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
     """
 
-    _proj_defs: dict[int, ProjSystemDefinition] | None = None
-    _tiling_defs: dict[int, RegularTilingDefinition] | None = None
+    _proj_defs: dict[str, ProjSystemDefinition] = PrivateAttr()
+    _tiling_defs: dict[int, RegularTilingDefinition] = PrivateAttr()
 
     _rpts_cls = RegularProjTilingSystem
 
@@ -237,7 +236,8 @@ class RegularGrid(BaseModel, extra="allow"):
             proj_defs[name] = ProjSystemDefinition(
                 name=name,
                 crs=rpts.crs,
-                extent=rpts[ref_tiling_level].extent,
+                min_xy=rpts[ref_tiling_level].extent[:2],
+                max_xy=rpts[ref_tiling_level].extent[2:],
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
             )
 
@@ -252,11 +252,10 @@ class RegularGrid(BaseModel, extra="allow"):
             Path to JSON file, where the grid definition should be stored.
 
         """
-        if self._proj_defs is None and self._tiling_defs is None:
+        if not hasattr(self, "_proj_defs") or not hasattr(self, "_tiling_defs"):
             proj_defs, tiling_defs = self._fetch_mod_grid_def()
         else:
-            proj_defs = cast("dict[str, ProjSystemDefinition]", self._proj_defs)
-            tiling_defs = cast("dict[int, RegularTilingDefinition]", self._tiling_defs)
+            proj_defs, tiling_defs = self._proj_defs, self._tiling_defs
 
         write_grid_def(json_path, proj_defs, tiling_defs)
 

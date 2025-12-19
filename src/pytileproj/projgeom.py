@@ -30,7 +30,7 @@
 
 import warnings
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple, cast
+from typing import Annotated, Any, NamedTuple
 
 import numpy as np
 import orjson
@@ -100,7 +100,7 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
         return {"geom": self.geom.wkt, "crs": self.crs.to_proj4()}
 
 
-def fetch_proj_zone(epsg: int) -> ProjGeom | None:
+def fetch_proj_zone(epsg: int) -> ProjGeom:
     """Fetch the zone polygon of the given projection from the EPSG database.
 
     Parameters
@@ -146,6 +146,10 @@ def fetch_proj_zone(epsg: int) -> ProjGeom | None:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
                 zone_geom = ProjGeom(geom=zone_geom, crs=pyproj.CRS.from_epsg(4326))
+
+    if zone_geom is None:
+        err_msg = f"No zone boundary found for EPSG {epsg}"
+        raise ValueError(err_msg)
 
     return zone_geom
 
@@ -407,7 +411,7 @@ def ij2xy(
         "c": (0.5, 0.5),
     }
 
-    px_shift = cast("tuple[int | float, int | float]", px_shift_map.get(origin))
+    px_shift = px_shift_map.get(origin)
     if px_shift is None:
         wrng_msg = (
             "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead"
