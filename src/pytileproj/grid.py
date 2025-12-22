@@ -32,9 +32,12 @@ import json
 from pathlib import Path
 
 import orjson
+import pyproj
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
+from pytileproj._errors import GeomOutOfZoneError
+from pytileproj.projgeom import ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
     ProjSystemDefinition,
@@ -197,6 +200,56 @@ class RegularGrid(BaseModel, extra="allow"):
             tiling_defs=tiling_defs,
         )
 
+    def get_system_from_lonlat(self, lon: float, lat: float) -> RegularProjTilingSystem:
+        """Get regular, projected tiling system from geographic coordinates.
+
+        Parameters
+        ----------
+        lon: float
+            Longitude.
+        lat: float
+            Latitude.
+
+        Returns
+        -------
+        RegularProjTilingSystem
+            The regular, projected tiling system which intersects with
+            the given coordinate.
+
+        """
+        coord = ProjCoord(x=lon, y=lat, crs=pyproj.CRS.from_epsg(4326))
+        return self.get_system_from_coord(coord)
+
+    def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem:
+        """Get regular, projected tiling system from projected coordinates.
+
+        Parameters
+        ----------
+        coord: ProjCoord
+            Projected coordinates.
+
+        Returns
+        -------
+        RegularProjTilingSystem
+            The regular, projected tiling system which intersects with
+            the given coordinate.
+
+        """
+        rpts_sel = None
+        for rpts in dict(self).values():
+            if coord in rpts:
+                rpts_sel = rpts
+                break
+
+        if rpts_sel is None:
+            err_msg = (
+                f"The given coordinate ({coord}) is "
+                "outside any tiling system boundaries."
+            )
+            raise GeomOutOfZoneError(err_msg)
+
+        return rpts_sel
+
     def _fetch_mod_grid_def(
         self,
     ) -> tuple[dict[str, ProjSystemDefinition], dict[int, RegularTilingDefinition]]:
@@ -329,13 +382,14 @@ class RegularGrid(BaseModel, extra="allow"):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
-    def __getitem__(self, name: str) -> RegularProjTilingSystem:
+    def __getitem__(self, arg: str | ProjCoord) -> RegularProjTilingSystem:
         """Return a regular, projected tiling system instance.
 
         Parameters
         ----------
-        name: str
-            Name/identifier of the projected tiling system instance.
+        arg: str | ProjCoord
+            Name/identifier of the projected tiling system instance or
+            a projected coordinate.
 
         Returns
         -------
@@ -343,7 +397,15 @@ class RegularGrid(BaseModel, extra="allow"):
             Regular, projected tiling system instance.
 
         """
-        return getattr(self, name)
+        if isinstance(arg, str):
+            rpts = getattr(self, arg)
+        elif isinstance(arg, ProjCoord):
+            rpts = self.get_system_from_coord(arg)
+        else:
+            err_msg = f"Item type '{type(arg)}' is not supported."
+            raise TypeError(err_msg)
+
+        return rpts
 
 
 def write_grid_def(
