@@ -89,10 +89,13 @@ __all__ = [
     "RegularProjTilingSystem",
     "RegularTilingDefinition",
     "TilingSystem",
+    "tiling_access",
 ]
 
 
-def _tiling_access(f):  # noqa: ANN001, ANN202
+def tiling_access(f):  # noqa: ANN001, ANN201
+    """Map tiling ID to tiling level."""
+
     def wrapper(self: "TilingSystem", *args: int | str, **kwargs: int | str) -> Any:  # noqa: ANN401
         use_args = f.__name__ == "__getitem__"
         tiling_id = args[0] if use_args else kwargs.get("tiling_id")
@@ -378,7 +381,7 @@ class TilingSystem(BaseModel):
         """Return number of tiling levels."""
         return len(self.tilings)
 
-    @_tiling_access
+    @tiling_access
     def __getitem__(self, tiling_level: int) -> RegularTiling | IrregularTiling:
         """Return the tiling at a specific tiling level.
 
@@ -605,7 +608,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
         return mask
 
-    @_tiling_access
+    @tiling_access
     def plot(  # noqa: C901, PLR0913
         self,
         *,
@@ -1149,7 +1152,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         return is_congruent
 
-    @_tiling_access
+    @tiling_access
     def n_tiles_x(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles in X direction at the given tiling.
 
@@ -1167,7 +1170,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         """
         return self[tiling_id].tm.matrixWidth
 
-    @_tiling_access
+    @tiling_access
     def n_tiles_y(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles in Y direction at the given tiling.
 
@@ -1185,7 +1188,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         """
         return self[tiling_id].tm.matrixHeight
 
-    @_tiling_access
+    @tiling_access
     def n_tiles(self, tiling_id: int | str | None = None) -> int:
         """Return the number of tiles at the given tiling.
 
@@ -1323,7 +1326,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         return raster_tile
 
-    @_tiling_access
+    @tiling_access
     def get_tile_from_coord(self, coord: ProjCoord, tiling_id: int = 0) -> RasterTile:
         """Get a raster tile object from projected coordinates.
 
@@ -1394,7 +1397,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         min_x, min_y, max_x, max_y = bbox
         yield from self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
 
-    @_tiling_access
+    @tiling_access
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
@@ -1481,7 +1484,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
-    @_tiling_access
+    @tiling_access
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
