@@ -1422,7 +1422,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
             bounding box.
 
         """
-        for tile in self._get_tiles_in_geog_bbox(bbox, tiling_id):
+        for tile in self._get_tiles_in_geog_bbox(bbox, tiling_id=tiling_id):
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, name=tilename)
             if not self._tile_in_zone(raster_tile):
