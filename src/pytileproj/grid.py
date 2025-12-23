@@ -37,12 +37,14 @@ from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
+from pytileproj._types import RasterTileGenerator
 from pytileproj.projgeom import ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
     ProjSystemDefinition,
     RegularProjTilingSystem,
     RegularTilingDefinition,
+    tiling_access,
 )
 
 __all__ = ["RegularGrid"]
@@ -368,6 +370,32 @@ class RegularGrid(BaseModel, extra="allow"):
             pp_def = f.read()
 
         return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
+
+    @tiling_access
+    def get_tiles_in_geog_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int = 0,
+    ) -> RasterTileGenerator:
+        """Get all tiles intersecting with the geographic bounding box.
+
+        Parameters
+        ----------
+        bbox: tuple[float, float, float, float]
+            Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
+        tiling_id: int | str
+            Tiling level or name.
+            Defaults to the first tiling level.
+
+        Returns
+        -------
+        RasterTileGenerator
+            Yields raster tile after tile, which intersects with the given
+            bounding box.
+
+        """
+        for rpts in dict(self).values():
+            yield from rpts.get_tiles_in_geog_bbox(bbox, tiling_id)
 
     def to_file(self, json_path: Path) -> None:
         """Write the JSON representation of the regular grid instance to a file.
