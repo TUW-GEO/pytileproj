@@ -44,7 +44,6 @@ from pytileproj.tiling_system import (
     ProjSystemDefinition,
     RegularProjTilingSystem,
     RegularTilingDefinition,
-    tiling_access,
 )
 
 __all__ = ["RegularGrid"]
@@ -371,7 +370,6 @@ class RegularGrid(BaseModel, extra="allow"):
 
         return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
 
-    @tiling_access
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],

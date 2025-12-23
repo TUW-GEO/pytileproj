@@ -781,7 +781,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
-        tiling_id: int | str | None = None,
+        tiling_id: int | str = 0,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -789,7 +789,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_id: int | str | None
+        tiling_id: int | str
             Tiling level or name.
             Defaults to the first tiling level.
 
@@ -1375,8 +1375,9 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
+    @tiling_access
     def _get_tiles_in_geog_bbox(
-        self, bbox: tuple[float, float, float, float], tiling_level: int = 0
+        self, bbox: tuple[float, float, float, float], tiling_id: int | str = 0
     ) -> TileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
 
@@ -1384,8 +1385,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_level: int, optional
-            Tiling level or zoom.
+        tiling_id: int | str
+            Tiling level or name.
             Defaults to the first tiling level.
 
         Returns
@@ -1395,13 +1396,14 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         min_x, min_y, max_x, max_y = bbox
-        yield from self._tms.tiles(min_x, min_y, max_x, max_y, [tiling_level])
+        yield from self._tms.tiles(
+            min_x, min_y, max_x, max_y, cast("list[int]", [tiling_id])
+        )
 
-    @tiling_access
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
-        tiling_id: int = 0,
+        tiling_id: int | str = 0,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -1488,7 +1490,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
-        tiling_id: int | str | None = None,
+        tiling_id: int | str = 0,
     ) -> RasterTileGenerator:
         """Get all tiles intersecting with the geographic bounding box.
 
@@ -1496,7 +1498,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         ----------
         bbox: tuple[float, float, float, float]
             Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_id: int | str | None
+        tiling_id: int | str
             Tiling level or name.
             Defaults to the first tiling level.
 
