@@ -185,6 +185,7 @@ class RasterTile(BaseModel):
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
+        **kwargs: Any,  # noqa: ANN401
     ) -> "RasterTile":
         """Initialise raster tile from a given extent and projection information.
 
@@ -200,6 +201,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in Y.
         name: str | None, optional
             Name of the raster tile.
+        **kwargs: Any
+            Optional keyword arguments for child class.
 
         Returns
         -------
@@ -214,7 +217,14 @@ class RasterTile(BaseModel):
         ul_x, ul_y = ll_x, ll_y + n_rows * y_pixel_size
         geotrans = (ul_x, x_pixel_size, 0, ul_y, 0, -y_pixel_size)
 
-        return cls(n_rows=n_rows, n_cols=n_cols, crs=crs, geotrans=geotrans, name=name)
+        return cls(
+            n_rows=n_rows,
+            n_cols=n_cols,
+            crs=crs,
+            geotrans=geotrans,
+            name=name,
+            **kwargs,
+        )
 
     @classmethod
     def from_geometry(
@@ -223,6 +233,7 @@ class RasterTile(BaseModel):
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
+        **kwargs: Any,  # noqa: ANN401
     ) -> "RasterTile":
         """Create a raster tile object from an existing geometry object.
 
@@ -240,6 +251,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in Y.
         name: str | None, optional
             Name of the raster tile.
+        **kwargs: Any
+            Optional keyword arguments for child class.
 
         Returns
         -------
@@ -259,6 +272,7 @@ class RasterTile(BaseModel):
             x_pixel_size,
             y_pixel_size,
             name=name,
+            **kwargs,
         )
 
     @classmethod
