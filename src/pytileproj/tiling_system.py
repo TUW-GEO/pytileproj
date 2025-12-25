@@ -1467,8 +1467,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         tile = self._name_to_tile(tilename)
-        parent_tile = self._tms.parent(tile)
-        parent_tilename = self._tile_to_name(tile)
+        parent_tile = self._tms.parent(tile)[0]
+        parent_tilename = self._tile_to_name(parent_tile)
         return self._tile_to_raster_tile(parent_tile, name=parent_tilename)
 
     def to_ogc_standard(self) -> dict:
