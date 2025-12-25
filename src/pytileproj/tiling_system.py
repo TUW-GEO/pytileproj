@@ -1430,6 +1430,44 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
             yield raster_tile
 
+    def get_children_from_name(self, tilename: str) -> RasterTileGenerator:
+        """Get all child tiles (next higher zoom level).
+
+        Parameters
+        ----------
+        tilename: str
+            Tilename.
+
+        Returns
+        -------
+        RasterTileGenerator
+            Yields all tile children as raster tiles.
+
+        """
+        tile = self._name_to_tile(tilename)
+        for child_tile in self._tms.children(tile):
+            child_tilename = self._tile_to_name(child_tile)
+            yield self._tile_to_raster_tile(child_tile, name=child_tilename)
+
+    def get_parent_from_name(self, tilename: str) -> RasterTile:
+        """Get parent tile (next lower zoom level).
+
+        Parameters
+        ----------
+        tilename: str
+            Tilename.
+
+        Returns
+        -------
+        RasterTile
+            Parent raster tile.
+
+        """
+        tile = self._name_to_tile(tilename)
+        parent_tile = self._tms.parent(tile)
+        parent_tilename = self._tile_to_name(tile)
+        return self._tile_to_raster_tile(parent_tile, name=parent_tilename)
+
     def to_ogc_standard(self) -> dict:
         """OGC representation of the tiling system."""
         return self._tms.model_dump()
