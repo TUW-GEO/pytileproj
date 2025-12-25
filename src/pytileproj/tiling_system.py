@@ -917,8 +917,11 @@ def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
     for tiling_level in tiling_levels[1:]:
         tiling = tilings[tiling_level]
 
-        same_origin = ref_tiling.origin_xy == tiling.origin_xy
-        if not same_origin:
+        same_ll_origin = ref_tiling.extent[:2] == tiling.extent[:2]
+        same_ul_origin = (ref_tiling.extent[0] == tiling.extent[0]) & (
+            ref_tiling.extent[3] == tiling.extent[3]
+        )
+        if not any([same_ll_origin, same_ul_origin]):
             ref_tiling_str = f"{ref_tiling.tiling_level}:{ref_tiling.origin_xy}"
             tiling_str = f"{tiling.tiling_level}:{tiling.origin_xy}"
             err_hdr = "The given tilings do not have the same origin:"
