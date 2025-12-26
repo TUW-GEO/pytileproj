@@ -1457,7 +1457,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         Parameters
         ----------
         bbox: tuple[float, float, float, float]
-            Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
+            Bounding box (west, south, east, north) for selecting tiles.
         tiling_id: int | str
             Tiling level or name.
             Defaults to the first tiling level.
@@ -1468,11 +1468,12 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Yields tile after tile, which intersects with the given bounding box.
 
         """
-        min_x, min_y, max_x, max_y = bbox
+        west, south, east, north = bbox
         bbox_poly = shapely.Polygon(
-            [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
+            [(west, south), (east, south), (east, north), (west, north)]
         )
-        bbox_poly = fix_polygon(bbox_poly)
+        if east < west:  # bbox crosses antimeridian
+            bbox_poly = fix_polygon(bbox_poly)
         bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
         if bbox_intersects:
             geog_geoms = []
