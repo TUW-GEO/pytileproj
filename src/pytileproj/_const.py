@@ -6,6 +6,7 @@ DEF_SEG_NUM = 5_000  # number of segments for a projected geometry
 DECIMALS = 9  # least significant digit after the command for rounding
 TIMEOUT = 60  # timeout for requests
 JSON_INDENT = 4  # indentation for JSON strings
+GEOG_EPSG = 4326
 
 VIS_INSTALLED = None not in [find_spec(pkg) for pkg in ["matplotlib", "cartopy"]]
 

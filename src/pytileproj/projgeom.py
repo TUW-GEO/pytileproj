@@ -47,6 +47,7 @@ from pytileproj._const import (
     DECIMALS,
     DEF_SEG_LEN_M,
     GEO_INSTALLED,
+    GEOG_EPSG,
     TIMEOUT,
     VIS_INSTALLED,
 )
@@ -145,7 +146,9 @@ def fetch_proj_zone(epsg: int) -> ProjGeom:
                 else:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
-                zone_geom = ProjGeom(geom=zone_geom, crs=pyproj.CRS.from_epsg(4326))
+                zone_geom = ProjGeom(
+                    geom=zone_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
+                )
 
     if zone_geom is None:
         err_msg = f"No zone boundary found for EPSG {epsg}"
@@ -551,8 +554,7 @@ def split_polygon_by_antimeridian(
         It contains only one polygon if no intersect with the antimeridian is given.
 
     """
-    geog_epsg = 4326
-    if geog_geom.crs.to_epsg() != geog_epsg:
+    if geog_geom.crs.to_epsg() != GEOG_EPSG:
         err_msg = "Geometry is not in the LonLat projection."
         raise ValueError(err_msg)
 
@@ -565,7 +567,7 @@ def split_polygon_by_antimeridian(
         err_msg = f"Geometry type {geom_type} not supported."
         raise ValueError(err_msg)
 
-    return ProjGeom(geom=geog_poly_am, crs=pyproj.CRS.from_epsg(geog_epsg))
+    return ProjGeom(geom=geog_poly_am, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
 
 
 def transform_geometry(
@@ -597,19 +599,23 @@ def transform_geometry(
     takes the antimeridian into account.
 
     """
-    # modify the geometry such it has no segment longer then the given distance
-    if segment is not None:
-        src_geom = shapely.segmentize(proj_geom.geom, max_segment_length=segment)
+    if proj_geom.crs.to_epsg() == GEOG_EPSG:
+        src_geom = split_polygon_by_antimeridian(proj_geom).geom
     else:
         src_geom = proj_geom.geom
+
+    # modify the geometry such it has no segment longer then the given distance
+    if segment is not None:
+        src_geom = shapely.segmentize(src_geom, max_segment_length=segment)
 
     transformer = pyproj.Transformer.from_crs(proj_geom.crs, crs, always_xy=True)
     dst_geom = shapely.transform(src_geom, transformer.transform, interleaved=False)
     dst_crs = pyproj.CRS.from_user_input(crs)
 
-    geog_epsg = 4236
-    if dst_crs.to_epsg() == geog_epsg:
-        dst_geom = split_polygon_by_antimeridian(dst_geom)
+    if dst_crs.to_epsg() == GEOG_EPSG:
+        dst_geom = split_polygon_by_antimeridian(
+            ProjGeom(geom=dst_geom, crs=dst_crs)
+        ).geom
 
     return ProjGeom(geom=dst_geom, crs=dst_crs)
 
@@ -628,7 +634,7 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
         Geometry object in the LonLat system.
 
     """
-    return transform_geometry(proj_geom, 4326, segment=DEF_SEG_LEN_M)
+    return transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
 
 
 def convert_any_to_geog_geom(
@@ -665,11 +671,11 @@ def convert_any_to_geog_geom(
                 f"(only 'geojson' and 'parquet'): {arg.suffix}"
             )
             raise OSError(err_msg)
-        proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
     elif isinstance(arg, shapely.Geometry):
-        proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
     elif isinstance(arg, str):
-        proj_geom = ProjGeom(geom=swkt.loads(arg), crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = ProjGeom(geom=swkt.loads(arg), crs=pyproj.CRS.from_epsg(GEOG_EPSG))
     elif isinstance(arg, dict):
         proj_geom = ProjGeom(**arg)
     elif isinstance(arg, ProjGeom):

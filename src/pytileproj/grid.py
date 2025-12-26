@@ -35,7 +35,7 @@ import orjson
 import pyproj
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
-from pytileproj._const import JSON_INDENT
+from pytileproj._const import GEOG_EPSG, JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
 from pytileproj._types import RasterTileGenerator
 from pytileproj.projgeom import ProjCoord
@@ -218,7 +218,7 @@ class RegularGrid(BaseModel, extra="allow"):
             the given coordinate.
 
         """
-        coord = ProjCoord(x=lon, y=lat, crs=pyproj.CRS.from_epsg(4326))
+        coord = ProjCoord(x=lon, y=lat, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
         return self.get_system_from_coord(coord)
 
     def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem:

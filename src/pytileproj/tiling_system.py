@@ -52,6 +52,7 @@ from pydantic import (
 from pytileproj._const import (
     DEF_SEG_LEN_DEG,
     GEO_INSTALLED,
+    GEOG_EPSG,
     JSON_INDENT,
     VIS_INSTALLED,
 )
@@ -134,7 +135,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         """Initialise remaining parts of the projection system object."""
         super().model_post_init(context)
         self._crs = pyproj.CRS.from_user_input(self.crs)
-        geog_crs = pyproj.CRS(4326)
+        geog_crs = pyproj.CRS(GEOG_EPSG)
         self._to_geog = pyproj.Transformer.from_crs(self._crs, geog_crs, always_xy=True)
         self._from_geog = pyproj.Transformer.from_crs(
             geog_crs, self._crs, always_xy=True
@@ -172,7 +173,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
             True if the given coordinate is within the projection zone, false if not.
 
         """
-        proj_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
+        proj_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
 
         return proj_coord in self
 
@@ -240,7 +241,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
 
         """
         lon, lat = self._to_geog.transform(x, y)
-        coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
+        coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
         if not self._lonlat_inside_proj(lon, lat):
             raise GeomOutOfZoneError(shapely.Point((x, y)))
 
@@ -276,7 +277,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
         if isinstance(other, ProjCoord):
             other = ProjGeom(geom=shapely.Point((other.x, other.y)), crs=other.crs)
 
-        geog_sref = pyproj.CRS.from_epsg(4326)
+        geog_sref = pyproj.CRS.from_epsg(GEOG_EPSG)
         if not geog_sref.is_exact_same(other.crs):
             wrpd_geom = transform_geometry(other, geog_sref)
         else:
@@ -432,7 +433,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Raster tile object.
 
         """
-        geog_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(4326))
+        geog_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
         return self.get_tile_from_coord(geog_coord, tiling_id=tiling_id)
 
     def get_tile_from_xy(
@@ -1442,7 +1443,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 ]
             )
             bbox_geom_geog = ProjGeom(
-                geom=bbox_poly_geog, crs=pyproj.CRS.from_epsg(4326)
+                geom=bbox_poly_geog, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
             )
             bbox_poly_proj = transform_geometry(
                 bbox_geom_geog, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
@@ -1532,7 +1533,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         geog_geom = transform_geom_to_geog(proj_geom)
-        geog_geom.geom = fix_polygon(geog_geom.geom)
         for tile in self._get_tiles_in_geog_bbox(
             geog_geom.geom.bounds, tiling_id=tiling_id
         ):

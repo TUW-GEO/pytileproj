@@ -5,6 +5,7 @@ import pyproj
 import pytest
 import shapely
 
+from pytileproj._const import GEOG_EPSG
 from pytileproj.projgeom import (
     ProjGeom,
     rasterise_polygon,
@@ -20,7 +21,7 @@ def poly_siberia_alaska() -> ProjGeom:
         (198.4723636216472, 66.06909015550372),
         (198.7828129097253, 68.14247939909886),
     ]
-    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(4326))
+    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(GEOG_EPSG))
 
 
 @pytest.fixture
@@ -31,7 +32,7 @@ def poly_spitzbergen() -> ProjGeom:
         (40.50119498304080, 79.73786853853339),
         (25.43098663332705, 75.61353436967198),
     ]
-    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(4326))
+    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(GEOG_EPSG))
 
 
 def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska: ProjGeom):

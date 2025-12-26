@@ -6,7 +6,7 @@ import pyproj
 import pytest
 from shapely import Polygon
 
-from pytileproj._const import DECIMALS, VIS_INSTALLED
+from pytileproj._const import DECIMALS, GEOG_EPSG, VIS_INSTALLED
 from pytileproj.projgeom import ProjGeom, transform_geometry
 from pytileproj.tile import RasterTile
 
@@ -30,7 +30,7 @@ def ref_boundary(ref_extent: tuple) -> ProjGeom:
     ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
     sh_geom = Polygon(ref_points)
 
-    return ProjGeom(geom=sh_geom, crs=pyproj.CRS.from_epsg(4326))
+    return ProjGeom(geom=sh_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +40,7 @@ def pixel_size() -> float:
 
 @pytest.fixture(scope="session")
 def epsg() -> int:
-    return 4326
+    return GEOG_EPSG
 
 
 @pytest.fixture(scope="session")
