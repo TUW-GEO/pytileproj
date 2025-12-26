@@ -1386,7 +1386,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
     def _tiles(
-        self, east: float, south: float, west: float, north: float, tiling_level: int
+        self, west: float, south: float, east: float, north: float, tiling_level: int
     ) -> TileGenerator:
         """Get the tiles overlapped by a geographic bounding box.
 
