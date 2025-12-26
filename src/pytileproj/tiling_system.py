@@ -1467,7 +1467,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
                         continue
 
                     tile = RegularTile(i, j, tiling_level)
-                    tile_bbox = self._tms.bounds(tile)
+                    tile_bbox = self._tms.xy_bounds(tile)
                     tile_poly = shapely.Polygon(
                         [
                             (tile_bbox.left, tile_bbox.bottom),
