@@ -1536,16 +1536,18 @@ class RegularProjTilingSystem(ProjTilingSystem):
         for tile in self._get_tiles_in_geog_bbox(
             geog_geom.geom.bounds, tiling_id=tiling_id
         ):
-            tile_bbox = self._tms.xy_bounds(tile)
+            tile_geog_bbox = self._tms.bounds(tile)
             tile_poly = shapely.Polygon(
                 [
-                    (tile_bbox.left, tile_bbox.bottom),
-                    (tile_bbox.right, tile_bbox.bottom),
-                    (tile_bbox.right, tile_bbox.top),
-                    (tile_bbox.left, tile_bbox.top),
+                    (tile_geog_bbox.left, tile_geog_bbox.bottom),
+                    (tile_geog_bbox.right, tile_geog_bbox.bottom),
+                    (tile_geog_bbox.right, tile_geog_bbox.top),
+                    (tile_geog_bbox.left, tile_geog_bbox.top),
                 ]
             )
-            tile_geom_intsct = shapely.intersects(tile_poly, proj_geom.geom)
+            tile_poly = fix_polygon(tile_poly)
+            tile_poly = shapely.segmentize(tile_poly, DEF_SEG_LEN_DEG)
+            tile_geom_intsct = shapely.intersects(tile_poly, geog_geom.geom)
             if tile_geom_intsct:
                 yield tile
 
