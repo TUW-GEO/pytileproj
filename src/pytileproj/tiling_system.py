@@ -1467,7 +1467,17 @@ class RegularProjTilingSystem(ProjTilingSystem):
                         continue
 
                     tile = RegularTile(i, j, tiling_level)
-                    if tile not in tiles_found:
+                    tile_bbox = self._tms.bounds(tile)
+                    tile_poly = shapely.Polygon(
+                        [
+                            (tile_bbox.left, tile_bbox.bottom),
+                            (tile_bbox.right, tile_bbox.bottom),
+                            (tile_bbox.right, tile_bbox.top),
+                            (tile_bbox.left, tile_bbox.top),
+                        ]
+                    )
+                    tile_bbox_intsct = shapely.intersects(tile_poly, bbox_poly_proj)
+                    if tile_bbox_intsct and (tile not in tiles_found):
                         tiles_found.append(tile)
                         yield tile
 
@@ -1493,7 +1503,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         """
         min_x, min_y, max_x, max_y = bbox
         bbox_poly = shapely.Polygon(
-            [(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, min_y)]
+            [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
         )
         bbox_poly = fix_polygon(bbox_poly)
         bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
