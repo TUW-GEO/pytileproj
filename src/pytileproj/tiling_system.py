@@ -48,7 +48,12 @@ from pydantic import (
     model_validator,
 )
 
-from pytileproj._const import DEF_SEG_NUM, GEO_INSTALLED, JSON_INDENT, VIS_INSTALLED
+from pytileproj._const import (
+    DEF_SEG_LEN_DEG,
+    GEO_INSTALLED,
+    JSON_INDENT,
+    VIS_INSTALLED,
+)
 from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj._types import (
     AnyTile,
@@ -1425,13 +1430,21 @@ class RegularProjTilingSystem(ProjTilingSystem):
             e = max(bbox.right, e) if es_contain_180th else min(bbox.right, e)  # noqa: PLW2901
             n = min(bbox.top, n)  # noqa: PLW2901
 
-            w, s, e, n = self._from_geog.transform_bounds(  # noqa: PLW2901
-                w + LL_EPSILON,
-                s + LL_EPSILON,
-                e - LL_EPSILON,
-                n - LL_EPSILON,
-                densify_pts=DEF_SEG_NUM,
+            bbox_poly_geog = shapely.Polygon(
+                [
+                    (w + LL_EPSILON, s + LL_EPSILON),
+                    (w + LL_EPSILON, n - LL_EPSILON),
+                    (e - LL_EPSILON, n - LL_EPSILON),
+                    (e - LL_EPSILON, s + LL_EPSILON),
+                ]
             )
+            bbox_geom_geog = ProjGeom(
+                geom=bbox_poly_geog, crs=pyproj.CRS.from_epsg(4326)
+            )
+            bbox_poly_proj = transform_geometry(
+                bbox_geom_geog, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
+            ).geom
+            w, s, e, n = bbox_poly_proj.bounds  # noqa: PLW2901
 
             nw_tile = self._tms._tile(w, n, tiling_level, ignore_coalescence=True)  # noqa: SLF001
             se_tile = self._tms._tile(e, s, tiling_level, ignore_coalescence=True)  # noqa: SLF001
@@ -1474,8 +1487,12 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         min_x, min_y, max_x, max_y = bbox
-
-        yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
+        bbox_poly = shapely.Polygon(
+            [(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, min_y)]
+        )
+        bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
+        if bbox_intersects:
+            yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
 
     def get_tiles_in_geog_bbox(
         self,
