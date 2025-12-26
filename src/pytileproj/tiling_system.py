@@ -37,10 +37,8 @@ import orjson
 import pyproj
 import shapely
 from antimeridian import fix_polygon
-from morecantile.commons import BoundingBox
-from morecantile.models import LL_EPSILON, TileMatrixSet
 from morecantile.models import Tile as RegularTile
-from morecantile.utils import lons_contain_antimeridian
+from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -1388,17 +1386,16 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
-    def _tiles(
-        self, west: float, south: float, east: float, north: float, tiling_level: int
-    ) -> TileGenerator:
+    def _tiles(self, geog_geom: ProjGeom, tiling_level: int) -> TileGenerator:
         """Get the tiles overlapped by a geographic bounding box.
 
         Original code from https://github.com/mapbox/mercantile/blob/master/mercantile/__init__.py#L424
 
         Parameters
         ----------
-        west, south, east, north : sequence of float
-            Bounding values in decimal degrees (geographic CRS).
+        geog_geom: ProjGeom
+            Projected geometry in geographic system representing
+            region of interest.
         tiling_level: int
             Tiling level or zoom.
 
@@ -1412,76 +1409,44 @@ class RegularProjTilingSystem(ProjTilingSystem):
         function yields exactly one tile when given the bounds of that same tile.
 
         """
-        # TMS bbox
-        left, bottom, right, top = self._tms.xy_bbox
-        bbox = BoundingBox(
-            *self._to_geog.transform_bounds(left, bottom, right, top, densify_pts=21)
-        )
+        geom = transform_geometry(
+            geog_geom, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
+        ).geom
+        w, s, e, n = geom.bounds
 
-        if west > east:
-            bbox_west = (bbox.left, south, east, north)
-            bbox_east = (west, south, bbox.right, north)
-            bboxes = [bbox_west, bbox_east]
-        else:
-            bboxes = [(west, south, east, north)]
+        nw_tile = self._tms._tile(w, n, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+        se_tile = self._tms._tile(e, s, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+        minx = min(nw_tile.x, se_tile.x)
+        maxx = max(nw_tile.x, se_tile.x)
+        miny = min(nw_tile.y, se_tile.y)
+        maxy = max(nw_tile.y, se_tile.y)
 
+        matrix = self._tms.matrix(tiling_level)
         tiles_found = []
-        for w, s, e, n in bboxes:
-            # Clamp bounding values.
-            es_contain_180th = lons_contain_antimeridian(e, bbox.right)
-            w = max(bbox.left, w)  # noqa: PLW2901
-            s = max(bbox.bottom, s)  # noqa: PLW2901
-            e = max(bbox.right, e) if es_contain_180th else min(bbox.right, e)  # noqa: PLW2901
-            n = min(bbox.top, n)  # noqa: PLW2901
-
-            bbox_poly_geog = shapely.Polygon(
-                [
-                    (w + LL_EPSILON, s + LL_EPSILON),
-                    (w + LL_EPSILON, n - LL_EPSILON),
-                    (e - LL_EPSILON, n - LL_EPSILON),
-                    (e - LL_EPSILON, s + LL_EPSILON),
-                ]
+        for j in range(miny, maxy + 1):
+            cf = (
+                matrix.get_coalesce_factor(j)
+                if matrix.variableMatrixWidths is not None
+                else 1
             )
-            bbox_geom_geog = ProjGeom(
-                geom=bbox_poly_geog, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
-            )
-            bbox_poly_proj = transform_geometry(
-                bbox_geom_geog, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
-            ).geom
-            w, s, e, n = bbox_poly_proj.bounds  # noqa: PLW2901
+            for i in range(minx, maxx + 1):
+                if cf != 1 and i % cf:
+                    continue
 
-            nw_tile = self._tms._tile(w, n, tiling_level, ignore_coalescence=True)  # noqa: SLF001
-            se_tile = self._tms._tile(e, s, tiling_level, ignore_coalescence=True)  # noqa: SLF001
-            minx = min(nw_tile.x, se_tile.x)
-            maxx = max(nw_tile.x, se_tile.x)
-            miny = min(nw_tile.y, se_tile.y)
-            maxy = max(nw_tile.y, se_tile.y)
-
-            matrix = self._tms.matrix(tiling_level)
-            for j in range(miny, maxy + 1):
-                cf = (
-                    matrix.get_coalesce_factor(j)
-                    if matrix.variableMatrixWidths is not None
-                    else 1
+                tile = RegularTile(i, j, tiling_level)
+                tile_bbox = self._tms.xy_bounds(tile)
+                tile_poly = shapely.Polygon(
+                    [
+                        (tile_bbox.left, tile_bbox.bottom),
+                        (tile_bbox.right, tile_bbox.bottom),
+                        (tile_bbox.right, tile_bbox.top),
+                        (tile_bbox.left, tile_bbox.top),
+                    ]
                 )
-                for i in range(minx, maxx + 1):
-                    if cf != 1 and i % cf:
-                        continue
-
-                    tile = RegularTile(i, j, tiling_level)
-                    tile_bbox = self._tms.xy_bounds(tile)
-                    tile_poly = shapely.Polygon(
-                        [
-                            (tile_bbox.left, tile_bbox.bottom),
-                            (tile_bbox.right, tile_bbox.bottom),
-                            (tile_bbox.right, tile_bbox.top),
-                            (tile_bbox.left, tile_bbox.top),
-                        ]
-                    )
-                    tile_bbox_intsct = shapely.intersects(tile_poly, bbox_poly_proj)
-                    if tile_bbox_intsct and (tile not in tiles_found):
-                        tiles_found.append(tile)
-                        yield tile
+                tile_bbox_intsct = shapely.intersects(tile_poly, geom)
+                if tile_bbox_intsct and (tile not in tiles_found):
+                    tiles_found.append(tile)
+                    yield tile
 
     @tiling_access
     def _get_tiles_in_geog_bbox(
@@ -1510,7 +1475,22 @@ class RegularProjTilingSystem(ProjTilingSystem):
         bbox_poly = fix_polygon(bbox_poly)
         bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
         if bbox_intersects:
-            yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
+            geog_geoms = []
+            if bbox_poly.geom_type == "MultiPolygon":
+                geog_geoms.append(
+                    ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+                    for geom in bbox_poly.geoms
+                )
+            else:
+                geog_geoms.append(
+                    ProjGeom(geom=bbox_poly, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+                )
+            tiles_found = []
+            for geog_geom in geog_geoms:
+                for tile in self._tiles(geog_geom, cast("int", tiling_id)):
+                    if tile not in tiles_found:
+                        tiles_found.append(tile)
+                        yield tile
 
     @tiling_access
     def _get_tiles_in_geom(
@@ -1533,22 +1513,22 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         geog_geom = transform_geom_to_geog(proj_geom)
-        for tile in self._get_tiles_in_geog_bbox(
-            geog_geom.geom.bounds, tiling_id=tiling_id
-        ):
-            tile_geog_bbox = self._tms.bounds(tile)
-            tile_poly = shapely.Polygon(
-                [
-                    (tile_geog_bbox.left, tile_geog_bbox.bottom),
-                    (tile_geog_bbox.right, tile_geog_bbox.bottom),
-                    (tile_geog_bbox.right, tile_geog_bbox.top),
-                    (tile_geog_bbox.left, tile_geog_bbox.top),
-                ]
+        geog_geoms = []
+        if geog_geom.geom.geom_type == "MultiPolygon":
+            geog_geoms.extend(
+                ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+                for geom in geog_geom.geom.geoms
             )
-            tile_poly = fix_polygon(tile_poly)
-            tile_geom_intsct = shapely.intersects(tile_poly, geog_geom.geom)
-            if tile_geom_intsct:
-                yield tile
+        else:
+            geog_geoms.append(
+                ProjGeom(geom=geog_geom.geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+            )
+        tiles_found = []
+        for geog_geom in geog_geoms:
+            for tile in self._tiles(geog_geom, cast("int", tiling_id)):
+                if tile not in tiles_found:
+                    tiles_found.append(tile)
+                    yield tile
 
     def get_tiles_in_geog_bbox(
         self,
