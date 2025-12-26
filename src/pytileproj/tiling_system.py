@@ -1546,7 +1546,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 ]
             )
             tile_poly = fix_polygon(tile_poly)
-            tile_poly = shapely.segmentize(tile_poly, DEF_SEG_LEN_DEG)
             tile_geom_intsct = shapely.intersects(tile_poly, geog_geom.geom)
             if tile_geom_intsct:
                 yield tile
