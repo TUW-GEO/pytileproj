@@ -1532,6 +1532,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         geog_geom = transform_geom_to_geog(proj_geom)
+        geog_geom.geom = fix_polygon(geog_geom.geom)
         for tile in self._get_tiles_in_geog_bbox(
             geog_geom.geom.bounds, tiling_id=tiling_id
         ):
