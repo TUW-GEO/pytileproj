@@ -1422,6 +1422,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         else:
             bboxes = [(west, south, east, north)]
 
+        tiles_found = []
         for w, s, e, n in bboxes:
             # Clamp bounding values.
             es_contain_180th = lons_contain_antimeridian(e, bbox.right)
@@ -1464,7 +1465,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
                     if cf != 1 and i % cf:
                         continue
 
-                    yield RegularTile(i, j, tiling_level)
+                    tile = RegularTile(i, j, tiling_level)
+                    if tile not in tiles_found:
+                        tiles_found.append(tile)
+                        yield tile
 
     @tiling_access
     def _get_tiles_in_geog_bbox(
