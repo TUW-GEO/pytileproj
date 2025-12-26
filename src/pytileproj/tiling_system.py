@@ -1477,7 +1477,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         if bbox_intersects:
             geog_geoms = []
             if bbox_poly.geom_type == "MultiPolygon":
-                geog_geoms.append(
+                geog_geoms.extend(
                     ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
                     for geom in bbox_poly.geoms
                 )
