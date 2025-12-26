@@ -45,7 +45,7 @@ from shapely.geometry import MultiPolygon, Polygon
 
 from pytileproj._const import (
     DECIMALS,
-    DEFAULT_SEG_NUM,
+    DEF_SEG_LEN_M,
     GEO_INSTALLED,
     TIMEOUT,
     VIS_INSTALLED,
@@ -628,7 +628,7 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
         Geometry object in the LonLat system.
 
     """
-    return transform_geometry(proj_geom, 4326, segment=DEFAULT_SEG_NUM)
+    return transform_geometry(proj_geom, 4326, segment=DEF_SEG_LEN_M)
 
 
 def convert_any_to_geog_geom(

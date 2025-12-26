@@ -36,8 +36,10 @@ import numpy as np
 import orjson
 import pyproj
 import shapely
+from morecantile.commons import BoundingBox
+from morecantile.models import LL_EPSILON, TileMatrixSet
 from morecantile.models import Tile as RegularTile
-from morecantile.models import TileMatrixSet
+from morecantile.utils import lons_contain_antimeridian
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -46,7 +48,7 @@ from pydantic import (
     model_validator,
 )
 
-from pytileproj._const import GEO_INSTALLED, JSON_INDENT, VIS_INSTALLED
+from pytileproj._const import DEF_SEG_NUM, GEO_INSTALLED, JSON_INDENT, VIS_INSTALLED
 from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj._types import (
     AnyTile,
@@ -1378,6 +1380,79 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
+    def _tiles(
+        self, east: float, south: float, west: float, north: float, tiling_level: int
+    ) -> TileGenerator:
+        """Get the tiles overlapped by a geographic bounding box.
+
+        Original code from https://github.com/mapbox/mercantile/blob/master/mercantile/__init__.py#L424
+
+        Parameters
+        ----------
+        west, south, east, north : sequence of float
+            Bounding values in decimal degrees (geographic CRS).
+        tiling_level: int
+            Tiling level or zoom.
+
+        Yields
+        ------
+        RegularTile
+
+        Notes
+        -----
+        A small epsilon is used on the south and east parameters so that this
+        function yields exactly one tile when given the bounds of that same tile.
+
+        """
+        # TMS bbox
+        left, bottom, right, top = self._tms.xy_bbox
+        bbox = BoundingBox(
+            *self._to_geog.transform_bounds(left, bottom, right, top, densify_pts=21)
+        )
+
+        if west > east:
+            bbox_west = (bbox.left, south, east, north)
+            bbox_east = (west, south, bbox.right, north)
+            bboxes = [bbox_west, bbox_east]
+        else:
+            bboxes = [(west, south, east, north)]
+
+        for w, s, e, n in bboxes:
+            # Clamp bounding values.
+            es_contain_180th = lons_contain_antimeridian(e, bbox.right)
+            w = max(bbox.left, w)  # noqa: PLW2901
+            s = max(bbox.bottom, s)  # noqa: PLW2901
+            e = max(bbox.right, e) if es_contain_180th else min(bbox.right, e)  # noqa: PLW2901
+            n = min(bbox.top, n)  # noqa: PLW2901
+
+            w, s, e, n = self._from_geog.transform_bounds(  # noqa: PLW2901
+                w + LL_EPSILON,
+                s + LL_EPSILON,
+                e - LL_EPSILON,
+                n - LL_EPSILON,
+                densify_pts=DEF_SEG_NUM,
+            )
+
+            nw_tile = self._tms._tile(w, n, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+            se_tile = self._tms._tile(e, s, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+            minx = min(nw_tile.x, se_tile.x)
+            maxx = max(nw_tile.x, se_tile.x)
+            miny = min(nw_tile.y, se_tile.y)
+            maxy = max(nw_tile.y, se_tile.y)
+
+            matrix = self._tms.matrix(tiling_level)
+            for j in range(miny, maxy + 1):
+                cf = (
+                    matrix.get_coalesce_factor(j)
+                    if matrix.variableMatrixWidths is not None
+                    else 1
+                )
+                for i in range(minx, maxx + 1):
+                    if cf != 1 and i % cf:
+                        continue
+
+                    yield RegularTile(i, j, tiling_level)
+
     @tiling_access
     def _get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_id: int | str = 0
@@ -1399,9 +1474,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         min_x, min_y, max_x, max_y = bbox
-        yield from self._tms.tiles(
-            min_x, min_y, max_x, max_y, cast("list[int]", [tiling_id])
-        )
+
+        yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
 
     def get_tiles_in_geog_bbox(
         self,
