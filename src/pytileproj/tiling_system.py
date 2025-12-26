@@ -36,6 +36,7 @@ import numpy as np
 import orjson
 import pyproj
 import shapely
+from antimeridian import fix_polygon
 from morecantile.commons import BoundingBox
 from morecantile.models import LL_EPSILON, TileMatrixSet
 from morecantile.models import Tile as RegularTile
@@ -1494,6 +1495,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         bbox_poly = shapely.Polygon(
             [(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, min_y)]
         )
+        bbox_poly = fix_polygon(bbox_poly)
         bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
         if bbox_intersects:
             yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
