@@ -70,6 +70,7 @@ from pytileproj.projgeom import (
     pyproj_to_cartopy_crs,
     rasterise_polygon,
     transform_coords,
+    transform_geom_to_geog,
     transform_geometry,
 )
 from pytileproj.tile import IrregularTile, RasterTile
@@ -1510,6 +1511,43 @@ class RegularProjTilingSystem(ProjTilingSystem):
         if bbox_intersects:
             yield from self._tiles(min_x, min_y, max_x, max_y, cast("int", tiling_id))
 
+    @tiling_access
+    def _get_tiles_in_geom(
+        self, proj_geom: ProjGeom, tiling_id: int | str = 0
+    ) -> TileGenerator:
+        """Search for tiles intersecting with the projected geometry.
+
+        Parameters
+        ----------
+        proj_geom : ProjGeom
+            Projected geometry representing the region of interest.
+        tiling_id: int | str
+            Tiling level or name.
+            Defaults to the first tiling level.
+
+        Returns
+        -------
+        RegTileIterator
+            Yields tile after tile, which intersects with the given geometry.
+
+        """
+        geog_geom = transform_geom_to_geog(proj_geom)
+        for tile in self._get_tiles_in_geog_bbox(
+            geog_geom.geom.bounds, tiling_id=tiling_id
+        ):
+            tile_bbox = self._tms.xy_bounds(tile)
+            tile_poly = shapely.Polygon(
+                [
+                    (tile_bbox.left, tile_bbox.bottom),
+                    (tile_bbox.right, tile_bbox.bottom),
+                    (tile_bbox.right, tile_bbox.top),
+                    (tile_bbox.left, tile_bbox.top),
+                ]
+            )
+            tile_geom_intsct = shapely.intersects(tile_poly, proj_geom.geom)
+            if tile_geom_intsct:
+                yield tile
+
     def get_tiles_in_geog_bbox(
         self,
         bbox: tuple[float, float, float, float],
@@ -1533,6 +1571,36 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         """
         for tile in self._get_tiles_in_geog_bbox(bbox, tiling_id=tiling_id):
+            tilename = self._tile_to_name(tile)
+            raster_tile = self._tile_to_raster_tile(tile, name=tilename)
+            if not self._tile_in_zone(raster_tile):
+                continue
+
+            yield raster_tile
+
+    def get_tiles_in_geom(
+        self,
+        proj_geom: ProjGeom,
+        tiling_id: int | str = 0,
+    ) -> RasterTileGenerator:
+        """Get all tiles intersecting with the geographic bounding box.
+
+        Parameters
+        ----------
+        proj_geom : ProjGeom
+            Projected geometry representing the region of interest.
+        tiling_id: int | str
+            Tiling level or name.
+            Defaults to the first tiling level.
+
+        Returns
+        -------
+        RasterTileGenerator
+            Yields raster tile after tile, which intersects with the given
+            bounding box.
+
+        """
+        for tile in self._get_tiles_in_geom(proj_geom, tiling_id=tiling_id):
             tilename = self._tile_to_name(tile)
             raster_tile = self._tile_to_raster_tile(tile, name=tilename)
             if not self._tile_in_zone(raster_tile):
