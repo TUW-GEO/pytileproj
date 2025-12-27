@@ -1388,16 +1388,17 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling = self[tile.z].sampling
         return RasterTile.from_extent(extent, self.crs, sampling, sampling, name=name)
 
-    def _tiles(self, geog_geom: ProjGeom, tiling_level: int) -> RasterTileGenerator:
-        """Get the tiles overlapped by a geographic bounding box.
+    def _tiles(
+        self, bbox: tuple[float, float, float, float], tiling_level: int
+    ) -> RasterTileGenerator:
+        """Get the tiles overlapped by a projected bounding box.
 
         Original code from https://github.com/mapbox/mercantile/blob/master/mercantile/__init__.py#L424
 
         Parameters
         ----------
-        geog_geom: ProjGeom
-            Projected geometry in geographic system representing
-            region of interest.
+        bbox: tuple[float, float, float, float]
+            Bounding box in projected coordinates (west, south, east, north).
         tiling_level: int
             Tiling level or zoom.
 
@@ -1411,13 +1412,9 @@ class RegularProjTilingSystem(ProjTilingSystem):
         function yields exactly one tile when given the bounds of that same tile.
 
         """
-        geom = transform_geometry(
-            geog_geom, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
-        ).geom
-        w, s, e, n = geom.bounds
-
-        nw_tile = self._tms._tile(w, n, tiling_level, ignore_coalescence=True)  # noqa: SLF001
-        se_tile = self._tms._tile(e, s, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+        west, south, east, north = bbox
+        nw_tile = self._tms._tile(west, north, tiling_level, ignore_coalescence=True)  # noqa: SLF001
+        se_tile = self._tms._tile(east, south, tiling_level, ignore_coalescence=True)  # noqa: SLF001
         minx = min(nw_tile.x, se_tile.x)
         maxx = max(nw_tile.x, se_tile.x)
         miny = min(nw_tile.y, se_tile.y)
@@ -1435,19 +1432,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
                     continue
 
                 tile = RegularTile(i, j, tiling_level)
-                tile_bbox = self._tms.xy_bounds(tile)
-                tile_poly = shapely.Polygon(
-                    [
-                        (tile_bbox.left, tile_bbox.bottom),
-                        (tile_bbox.right, tile_bbox.bottom),
-                        (tile_bbox.right, tile_bbox.top),
-                        (tile_bbox.left, tile_bbox.top),
-                    ]
-                )
-                tile_bbox_intsct = shapely.intersects(tile_poly, geom)
-                if not tile_bbox_intsct:
-                    continue
-
                 tilename = self._tile_to_name(tile)
                 raster_tile = self._tile_to_raster_tile(tile, name=tilename)
 
@@ -1484,8 +1468,20 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 geog_geoms.append(GeogGeom(geom=geom_intersection))
             tilenames = []
             for geom in geog_geoms:
-                for raster_tile in self._tiles(geom, tiling_level):
+                proj_geom = transform_geometry(
+                    geom, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
+                )
+                for raster_tile in self._tiles(
+                    proj_geom.geom.bounds,
+                    tiling_level,
+                ):
                     if raster_tile.name not in tilenames:
+                        tile_intersects = shapely.intersects(
+                            raster_tile.boundary, proj_geom.geom
+                        )
+                        if not tile_intersects:
+                            continue
+
                         tilenames.append(raster_tile.name)
                         yield raster_tile
 
@@ -1505,7 +1501,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         Returns
         -------
-        RegTileIterator
+        RasterTileGenerator
             Yields tile after tile, which intersects with the given bounding box.
 
         """
@@ -1519,6 +1515,28 @@ class RegularProjTilingSystem(ProjTilingSystem):
         yield from self._get_tiles_in_geog_geom(
             GeogGeom(geom=bbox_poly), cast("int", tiling_id)
         )
+
+    @tiling_access
+    def get_tiles_in_bbox(
+        self, bbox: tuple[float, float, float, float], tiling_id: int | str = 0
+    ) -> RasterTileGenerator:
+        """Search for tiles intersecting with the projected bounding box.
+
+        Parameters
+        ----------
+        bbox: tuple[float, float, float, float]
+            Projected bounding box (west, south, east, north) for selecting tiles.
+        tiling_id: int | str
+            Tiling level or name.
+            Defaults to the first tiling level.
+
+        Returns
+        -------
+        RasterTileGenerator
+            Yields tile after tile, which intersects with the given bounding box.
+
+        """
+        yield from self._tiles(bbox, cast("int", tiling_id))
 
     @tiling_access
     def get_tiles_in_geom(
@@ -1536,7 +1554,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         Returns
         -------
-        RegTileIterator
+        RasterTileGenerator
             Yields tile after tile, which intersects with the given geometry.
 
         """
