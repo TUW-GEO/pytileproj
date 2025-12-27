@@ -1403,7 +1403,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
         Yields
         ------
-        RegularTile
+        RasterTile
 
         Notes
         -----
@@ -1455,8 +1455,44 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
                 yield raster_tile
 
+    def _get_tiles_in_geog_geom(
+        self, geog_geom: GeogGeom, tiling_level: int = 0
+    ) -> RasterTileGenerator:
+        """Get all raster tiles covered by a geographic geometry.
+
+        Parameters
+        ----------
+        geog_geom: GeogGeom
+            Geometry given in LonLat geographic projection system.
+        tiling_level: int
+            Tiling level or zoom.
+
+        Yields
+        ------
+        RasterTile
+
+        """
+        geom_intersection = shapely.intersection(
+            geog_geom.geom, self._proj_zone_geog.geom
+        )
+        geom_intersects = not geom_intersection.is_empty
+        if geom_intersects:
+            geog_geoms = []
+            if geom_intersection.geom_type == "MultiPolygon":
+                geog_geoms.extend(
+                    GeogGeom(geom=geom) for geom in geom_intersection.geoms
+                )
+            else:
+                geog_geoms.append(GeogGeom(geom=geom_intersection))
+            tilenames = []
+            for geom in geog_geoms:
+                for raster_tile in self._tiles(geom, tiling_level):
+                    if raster_tile.name not in tilenames:
+                        tilenames.append(raster_tile.name)
+                        yield raster_tile
+
     @tiling_access
-    def _get_tiles_in_geog_bbox(
+    def get_tiles_in_geog_bbox(
         self, bbox: tuple[float, float, float, float], tiling_id: int | str = 0
     ) -> RasterTileGenerator:
         """Search for tiles intersecting with the geographic bounding box.
@@ -1481,25 +1517,13 @@ class RegularProjTilingSystem(ProjTilingSystem):
         )
         if east < west:  # bbox crosses antimeridian
             bbox_poly = fix_polygon(bbox_poly)
-        bbox_intersection = shapely.intersection(bbox_poly, self._proj_zone_geog.geom)
-        bbox_intersects = not bbox_intersection.is_empty
-        if bbox_intersects:
-            geog_geoms = []
-            if bbox_intersection.geom_type == "MultiPolygon":
-                geog_geoms.extend(
-                    GeogGeom(geom=geom) for geom in bbox_intersection.geoms
-                )
-            else:
-                geog_geoms.append(GeogGeom(geom=bbox_intersection))
-            tilenames = []
-            for geog_geom in geog_geoms:
-                for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):
-                    if raster_tile.name not in tilenames:
-                        tilenames.append(raster_tile.name)
-                        yield raster_tile
+
+        yield from self._get_tiles_in_geog_geom(
+            GeogGeom(geom=bbox_poly), cast("int", tiling_id)
+        )
 
     @tiling_access
-    def _get_tiles_in_geom(
+    def get_tiles_in_geom(
         self, proj_geom: ProjGeom, tiling_id: int | str = 0
     ) -> RasterTileGenerator:
         """Search for tiles intersecting with the projected geometry.
@@ -1523,65 +1547,8 @@ class RegularProjTilingSystem(ProjTilingSystem):
             geog_geom = GeogGeom(geom=geog_geom)
         else:
             geog_geom = transform_geom_to_geog(proj_geom)
-        geog_geoms = []
-        if geog_geom.geom.geom_type == "MultiPolygon":
-            geog_geoms.extend(GeogGeom(geom=geom) for geom in geog_geom.geom.geoms)
-        else:
-            geog_geoms.append(GeogGeom(geom=geog_geom.geom))
-        tilenames = []
-        for geog_geom in geog_geoms:
-            for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):
-                if raster_tile.name not in tilenames:
-                    tilenames.append(raster_tile.name)
-                    yield raster_tile
 
-    def get_tiles_in_geog_bbox(
-        self,
-        bbox: tuple[float, float, float, float],
-        tiling_id: int | str = 0,
-    ) -> RasterTileGenerator:
-        """Get all tiles intersecting with the geographic bounding box.
-
-        Parameters
-        ----------
-        bbox: tuple[float, float, float, float]
-            Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
-        tiling_id: int | str
-            Tiling level or name.
-            Defaults to the first tiling level.
-
-        Returns
-        -------
-        RasterTileGenerator
-            Yields raster tile after tile, which intersects with the given
-            bounding box.
-
-        """
-        yield from self._get_tiles_in_geog_bbox(bbox, tiling_id=tiling_id)
-
-    def get_tiles_in_geom(
-        self,
-        proj_geom: ProjGeom,
-        tiling_id: int | str = 0,
-    ) -> RasterTileGenerator:
-        """Get all tiles intersecting with the geographic bounding box.
-
-        Parameters
-        ----------
-        proj_geom : ProjGeom
-            Projected geometry representing the region of interest.
-        tiling_id: int | str
-            Tiling level or name.
-            Defaults to the first tiling level.
-
-        Returns
-        -------
-        RasterTileGenerator
-            Yields raster tile after tile, which intersects with the given
-            bounding box.
-
-        """
-        yield from self._get_tiles_in_geom(proj_geom, tiling_id=tiling_id)
+        yield from self._get_tiles_in_geog_geom(geog_geom, cast("int", tiling_id))
 
     def get_children_from_name(self, tilename: str) -> RasterTileGenerator:
         """Get all child tiles (next higher zoom level).

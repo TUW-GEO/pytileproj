@@ -31,7 +31,7 @@
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import numpy as np
 import orjson
@@ -544,13 +544,13 @@ def rasterise_polygon(
 
 
 def split_polygon_by_antimeridian(
-    geog_geom: ProjGeom, *, great_circle: bool = False
-) -> ProjGeom:
+    geog_geom: GeogGeom, *, great_circle: bool = False
+) -> GeogGeom:
     """Split a polygon or multi-polygon at the antimeridian.
 
     Parameters
     ----------
-    geog_geom : ProjGeom
+    geog_geom : GeogGeom
         Projected polygon or multi-polygon object in LonLat space to be
         split by the antimeridian.
     great_circle: bool, optional
@@ -584,7 +584,7 @@ def transform_geometry(
     proj_geom: ProjGeom,
     crs: Any,  # noqa: ANN401
     segment: float | None = None,
-) -> ProjGeom:
+) -> ProjGeom | GeogGeom:
     """Transform a geometry to the given target spatial reference system.
 
     Parameters
@@ -620,14 +620,14 @@ def transform_geometry(
     dst_crs = pyproj.CRS.from_user_input(crs)
 
     if dst_crs.to_epsg() == GEOG_EPSG:
-        dst_geom = split_polygon_by_antimeridian(
-            ProjGeom(geom=dst_geom, crs=dst_crs)
-        ).geom
+        dst_geom = split_polygon_by_antimeridian(GeogGeom(geom=dst_geom))
+    else:
+        dst_geom = ProjGeom(geom=dst_geom, crs=dst_crs)
 
-    return ProjGeom(geom=dst_geom, crs=dst_crs)
+    return dst_geom
 
 
-def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
+def transform_geom_to_geog(proj_geom: ProjGeom) -> GeogGeom:
     """Transform geometry to the LonLat system.
 
     Parameters
@@ -641,7 +641,9 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
         Geometry object in the LonLat system.
 
     """
-    return transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
+    return cast(
+        "GeogGeom", transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
+    )
 
 
 def convert_any_to_geog_geom(
