@@ -599,10 +599,7 @@ def transform_geometry(
     takes the antimeridian into account.
 
     """
-    if proj_geom.crs.to_epsg() == GEOG_EPSG:
-        src_geom = split_polygon_by_antimeridian(proj_geom).geom
-    else:
-        src_geom = proj_geom.geom
+    src_geom = proj_geom.geom
 
     # modify the geometry such it has no segment longer then the given distance
     if segment is not None:
