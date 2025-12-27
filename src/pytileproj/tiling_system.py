@@ -1495,7 +1495,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):
                     if raster_tile.name not in tilenames:
                         tilenames.append(raster_tile.name)
-                        yield raster_tile.name
+                        yield raster_tile
 
     @tiling_access
     def _get_tiles_in_geom(
@@ -1532,7 +1532,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
             for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):
                 if raster_tile.name not in tilenames:
                     tilenames.append(raster_tile.name)
-                    yield raster_tile.name
+                    yield raster_tile
 
     def get_tiles_in_geog_bbox(
         self,
