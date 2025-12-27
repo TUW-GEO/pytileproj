@@ -62,6 +62,8 @@ from pytileproj._types import (
     TileGenerator,
 )
 from pytileproj.projgeom import (
+    GeogCoord,
+    GeogGeom,
     ProjCoord,
     ProjGeom,
     convert_any_to_geog_geom,
@@ -171,7 +173,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
             True if the given coordinate is within the projection zone, false if not.
 
         """
-        proj_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
+        proj_coord = GeogCoord(lon, lat)
 
         return proj_coord in self
 
@@ -239,7 +241,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
 
         """
         lon, lat = self._to_geog.transform(x, y)
-        coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
+        coord = GeogCoord(x=lon, y=lat)
         if not self._lonlat_inside_proj(lon, lat):
             raise GeomOutOfZoneError(shapely.Point((x, y)))
 
@@ -431,7 +433,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             Raster tile object.
 
         """
-        geog_coord = ProjCoord(lon, lat, pyproj.CRS.from_epsg(GEOG_EPSG))
+        geog_coord = GeogCoord(x=lon, y=lat)
         return self.get_tile_from_coord(geog_coord, tiling_id=tiling_id)
 
     def get_tile_from_xy(
@@ -1449,8 +1451,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
                 tilename = self._tile_to_name(tile)
                 raster_tile = self._tile_to_raster_tile(tile, name=tilename)
-                if not self._tile_in_zone(raster_tile):
-                    continue
 
                 yield raster_tile
 
@@ -1486,15 +1486,10 @@ class RegularProjTilingSystem(ProjTilingSystem):
             geog_geoms = []
             if bbox_intersection.geom_type == "MultiPolygon":
                 geog_geoms.extend(
-                    ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
-                    for geom in bbox_intersection.geoms
+                    GeogGeom(geom=geom) for geom in bbox_intersection.geoms
                 )
             else:
-                geog_geoms.append(
-                    ProjGeom(
-                        geom=bbox_intersection, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
-                    )
-                )
+                geog_geoms.append(GeogGeom(geom=bbox_intersection))
             tilenames = []
             for geog_geom in geog_geoms:
                 for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):
@@ -1524,19 +1519,14 @@ class RegularProjTilingSystem(ProjTilingSystem):
         """
         if proj_geom.crs.to_epsg() == GEOG_EPSG:
             geog_geom = fix_polygon(proj_geom.geom)
-            geog_geom = ProjGeom(geom=geog_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+            geog_geom = GeogGeom(geom=geog_geom)
         else:
             geog_geom = transform_geom_to_geog(proj_geom)
         geog_geoms = []
         if geog_geom.geom.geom_type == "MultiPolygon":
-            geog_geoms.extend(
-                ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
-                for geom in geog_geom.geom.geoms
-            )
+            geog_geoms.extend(GeogGeom(geom=geom) for geom in geog_geom.geom.geoms)
         else:
-            geog_geoms.append(
-                ProjGeom(geom=geog_geom.geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
-            )
+            geog_geoms.append(GeogGeom(geom=geog_geom.geom))
         tilenames = []
         for geog_geom in geog_geoms:
             for raster_tile in self._tiles(geog_geom, cast("int", tiling_id)):

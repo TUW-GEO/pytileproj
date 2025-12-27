@@ -2,12 +2,11 @@ import copy
 import random
 
 import numpy as np
-import pyproj
 import pytest
 from shapely import Polygon
 
 from pytileproj._const import DECIMALS, GEOG_EPSG, VIS_INSTALLED
-from pytileproj.projgeom import ProjGeom, transform_geometry
+from pytileproj.projgeom import GeogGeom, ProjGeom, transform_geometry
 from pytileproj.tile import RasterTile
 
 if VIS_INSTALLED:
@@ -25,12 +24,12 @@ def ref_extent() -> tuple:
 
 
 @pytest.fixture(scope="session")
-def ref_boundary(ref_extent: tuple) -> ProjGeom:
+def ref_boundary(ref_extent: tuple) -> GeogGeom:
     ll_x, ll_y, ur_x, ur_y = ref_extent
     ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
     sh_geom = Polygon(ref_points)
 
-    return ProjGeom(geom=sh_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+    return GeogGeom(geom=sh_geom)
 
 
 @pytest.fixture(scope="session")

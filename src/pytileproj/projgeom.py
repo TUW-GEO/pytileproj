@@ -29,8 +29,9 @@
 """Utility module for projected geometries."""
 
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple
+from typing import Annotated, Any
 
 import numpy as np
 import orjson
@@ -47,6 +48,7 @@ from pytileproj._const import (
     DECIMALS,
     DEF_SEG_LEN_M,
     GEO_INSTALLED,
+    GEOG_CRS,
     GEOG_EPSG,
     TIMEOUT,
     VIS_INSTALLED,
@@ -73,12 +75,18 @@ __all__ = [
 ]
 
 
-class ProjCoord(NamedTuple):
+@dataclass(frozen=True)
+class ProjCoord:
     """Define a coordinate in a certain projection."""
 
     x: float
     y: float
     crs: pyproj.CRS
+
+
+@dataclass(frozen=True)
+class GeogCoord(ProjCoord):
+    crs: pyproj.CRS = GEOG_CRS
 
 
 def convert_geom(arg: str | shapely.Geometry) -> shapely.Geometry:
@@ -99,6 +107,10 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     def serialize(self) -> dict:
         """Serialise/encode class variables."""
         return {"geom": self.geom.wkt, "crs": self.crs.to_proj4()}
+
+
+class GeogGeom(ProjGeom):
+    crs: pyproj.CRS = pyproj.CRS.from_epsg(GEOG_EPSG)
 
 
 def fetch_proj_zone(epsg: int) -> ProjGeom:
@@ -146,9 +158,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom:
                 else:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
-                zone_geom = ProjGeom(
-                    geom=zone_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
-                )
+                zone_geom = GeogGeom(geom=zone_geom)
 
     if zone_geom is None:
         err_msg = f"No zone boundary found for EPSG {epsg}"
@@ -567,7 +577,7 @@ def split_polygon_by_antimeridian(
         err_msg = f"Geometry type {geom_type} not supported."
         raise ValueError(err_msg)
 
-    return ProjGeom(geom=geog_poly_am, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+    return GeogGeom(geom=geog_poly_am)
 
 
 def transform_geometry(
@@ -668,11 +678,11 @@ def convert_any_to_geog_geom(
                 f"(only 'geojson' and 'parquet'): {arg.suffix}"
             )
             raise OSError(err_msg)
-        proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+        proj_geom = GeogGeom(geom=geom)
     elif isinstance(arg, shapely.Geometry):
-        proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+        proj_geom = GeogGeom(geom=arg)
     elif isinstance(arg, str):
-        proj_geom = ProjGeom(geom=swkt.loads(arg), crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+        proj_geom = GeogGeom(geom=swkt.loads(arg))
     elif isinstance(arg, dict):
         proj_geom = ProjGeom(**arg)
     elif isinstance(arg, ProjGeom):

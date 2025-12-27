@@ -32,13 +32,12 @@ import json
 from pathlib import Path
 
 import orjson
-import pyproj
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
-from pytileproj._const import GEOG_EPSG, JSON_INDENT
+from pytileproj._const import JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
 from pytileproj._types import RasterTileGenerator
-from pytileproj.projgeom import ProjCoord
+from pytileproj.projgeom import GeogCoord, ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
     ProjSystemDefinition,
@@ -218,7 +217,7 @@ class RegularGrid(BaseModel, extra="allow"):
             the given coordinate.
 
         """
-        coord = ProjCoord(x=lon, y=lat, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+        coord = GeogCoord(x=lon, y=lat)
         return self.get_system_from_coord(coord)
 
     def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem:
