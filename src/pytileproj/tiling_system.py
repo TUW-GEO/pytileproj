@@ -1513,7 +1513,11 @@ class RegularProjTilingSystem(ProjTilingSystem):
             Yields tile after tile, which intersects with the given geometry.
 
         """
-        geog_geom = transform_geom_to_geog(proj_geom)
+        if proj_geom.crs.to_epsg() == GEOG_EPSG:
+            geog_geom = fix_polygon(proj_geom.geom)
+            geog_geom = ProjGeom(geom=geog_geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+        else:
+            geog_geom = transform_geom_to_geog(proj_geom)
         geog_geoms = []
         if geog_geom.geom.geom_type == "MultiPolygon":
             geog_geoms.extend(
