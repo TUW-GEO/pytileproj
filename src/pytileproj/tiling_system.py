@@ -1474,17 +1474,20 @@ class RegularProjTilingSystem(ProjTilingSystem):
         )
         if east < west:  # bbox crosses antimeridian
             bbox_poly = fix_polygon(bbox_poly)
-        bbox_intersects = shapely.intersects(bbox_poly, self._proj_zone_geog.geom)
+        bbox_intersection = shapely.intersection(bbox_poly, self._proj_zone_geog.geom)
+        bbox_intersects = bbox_intersection.is_empty
         if bbox_intersects:
             geog_geoms = []
-            if bbox_poly.geom_type == "MultiPolygon":
+            if bbox_intersection.geom_type == "MultiPolygon":
                 geog_geoms.extend(
                     ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
                     for geom in bbox_poly.geoms
                 )
             else:
                 geog_geoms.append(
-                    ProjGeom(geom=bbox_poly, crs=pyproj.CRS.from_epsg(GEOG_EPSG))
+                    ProjGeom(
+                        geom=bbox_intersection, crs=pyproj.CRS.from_epsg(GEOG_EPSG)
+                    )
                 )
             tiles_found = []
             for geog_geom in geog_geoms:
