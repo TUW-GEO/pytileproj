@@ -1477,7 +1477,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
                 ):
                     if raster_tile.name not in tilenames:
                         tile_intersects = shapely.intersects(
-                            raster_tile.boundary, proj_geom.geom
+                            raster_tile.boundary_shapely, proj_geom.geom
                         )
                         if not tile_intersects:
                             continue
