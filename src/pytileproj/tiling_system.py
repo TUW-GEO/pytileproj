@@ -1450,8 +1450,6 @@ class RegularProjTilingSystem(ProjTilingSystem):
 
                 tilename = self._tile_to_name(tile)
                 raster_tile = self._tile_to_raster_tile(tile, name=tilename)
-                if not self._tile_in_zone(raster_tile):
-                    continue
 
                 yield raster_tile
 
