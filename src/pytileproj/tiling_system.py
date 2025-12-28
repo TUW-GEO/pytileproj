@@ -1065,7 +1065,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
         sampling: float | dict[int, float | int],
         proj_def: ProjSystemDefinition,
         tiling_defs: dict[int, RegularTilingDefinition],
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> "RegularProjTilingSystem":
         """Classmethod for creating a regular, projected tiling system.
 
@@ -1082,7 +1082,7 @@ class RegularProjTilingSystem(ProjTilingSystem):
             tiling IDs as keys and samplings as values.
         tiling_defs: Dict[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
-        **kwargs: dict[str, Any]
+        **kwargs: Any
             Additional class attributes.
 
         Returns
