@@ -31,6 +31,7 @@
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Generic
 
 import orjson
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
@@ -49,7 +50,7 @@ from pytileproj.tiling_system import (
 __all__ = ["RegularGrid"]
 
 
-class RegularGrid(BaseModel, extra="allow"):
+class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     """Define a regular grid.
 
     A collection of regular, projected, multi-level tiling systems
@@ -71,7 +72,7 @@ class RegularGrid(BaseModel, extra="allow"):
         proj_def: ProjSystemDefinition,
         sampling: float | Mapping[int, float | int],
         tiling_defs: Mapping[int, RegularTilingDefinition],
-    ) -> RegularProjTilingSystem:
+    ) -> RegularProjTilingSystem[T_co]:
         """Create regular projected tiling system from grid definitions.
 
         Create a regular, projected tiling system instance from given tiling system
