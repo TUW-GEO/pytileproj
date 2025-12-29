@@ -187,7 +187,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RasterTile":
+    ) -> "RasterTile"[T_co]:
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
@@ -235,7 +235,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RasterTile":
+    ) -> "RasterTile"[T_co]:
         """Create a raster tile object from an existing geometry object.
 
         Since a raster tile can represent rectangles only, non-rectangular
@@ -277,7 +277,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "RasterTile":
+    def from_json(cls, json_str: str) -> "RasterTile"[T_co]:
         """Create raster tile from JSON str.
 
         Parameters
