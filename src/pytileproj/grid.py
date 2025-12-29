@@ -36,7 +36,7 @@ from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
-from pytileproj._types import RasterTileGenerator
+from pytileproj._types import RasterTileGenerator, T_co
 from pytileproj.projgeom import GeogCoord, ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
@@ -435,7 +435,7 @@ class RegularGrid(BaseModel, extra="allow"):
 
 def write_grid_def(
     json_path: Path,
-    proj_defs: dict[str, ProjSystemDefinition],
+    proj_defs: dict[str, ProjSystemDefinition[T_co]],
     tiling_defs: dict[int, RegularTilingDefinition],
 ) -> None:
     """Write grid definitions to a JSON file.
