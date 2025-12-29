@@ -29,6 +29,7 @@
 """Grid module defining regular and irregular grids."""
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 import orjson
@@ -435,8 +436,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
 def write_grid_def(
     json_path: Path,
-    proj_defs: dict[str, ProjSystemDefinition[T_co]],
-    tiling_defs: dict[int, RegularTilingDefinition],
+    proj_defs: Mapping[str, ProjSystemDefinition[T_co]],
+    tiling_defs: Mapping[int, RegularTilingDefinition],
 ) -> None:
     """Write grid definitions to a JSON file.
 
