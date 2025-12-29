@@ -1068,7 +1068,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         proj_def: ProjSystemDefinition,
         tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RegularProjTilingSystem[T_co]":
+    ) -> "RegularProjTilingSystem"[T_co]:
         """Classmethod for creating a regular, projected tiling system.
 
         Create a regular, projected tiling system instance from given tiling system
