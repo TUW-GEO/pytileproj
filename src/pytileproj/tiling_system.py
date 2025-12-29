@@ -30,7 +30,7 @@
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Union, cast
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Union, cast
 
 import numpy as np
 import orjson
@@ -59,6 +59,7 @@ from pytileproj._types import (
     AnyTile,
     Extent,
     RasterTileGenerator,
+    T_co,
     TileGenerator,
 )
 from pytileproj.projgeom import (
@@ -959,7 +960,7 @@ def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
         ref_tiling = tiling
 
 
-class ProjSystemDefinition(BaseModel, arbitrary_types_allowed=True):
+class ProjSystemDefinition(BaseModel, Generic[T_co], arbitrary_types_allowed=True):
     """Definition for a projection system."""
 
     name: str
@@ -984,7 +985,7 @@ class RegularTilingDefinition(BaseModel):
     ]
 
 
-class RegularProjTilingSystem(ProjTilingSystem):
+class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
     """Regular projected, multi-level tiling system."""
 
     tilings: dict[int, RegularTiling]
