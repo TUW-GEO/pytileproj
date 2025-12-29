@@ -29,6 +29,7 @@
 """Tiling system module defining a irregular and regular tiling systems."""
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Union, cast
 
@@ -1006,7 +1007,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
     @staticmethod
     def _get_tiling_from_id(
-        tiling_defs: dict[int, RegularTilingDefinition], tiling_id: int | str
+        tiling_defs: Mapping[int, RegularTilingDefinition], tiling_id: int | str
     ) -> tuple[int | None, RegularTilingDefinition | None]:
         if isinstance(tiling_id, int):
             tiling_def = tiling_defs.get(tiling_id)
@@ -1065,9 +1066,9 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         cls,
         sampling: float | dict[int, float | int],
         proj_def: ProjSystemDefinition,
-        tiling_defs: dict[int, RegularTilingDefinition],
+        tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RegularProjTilingSystem":
+    ) -> "RegularProjTilingSystem[T_co]":
         """Classmethod for creating a regular, projected tiling system.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -1121,7 +1122,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         )
 
     @model_validator(mode="after")
-    def check_tilings(self) -> "RegularProjTilingSystem":
+    def check_tilings(self) -> "RegularProjTilingSystem[T_co]":
         """Validate if different regular tilings are compliant with each other."""
         validate_regular_tilings(self.tilings)
         return self
@@ -1228,7 +1229,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         extent: tuple[float, float, float, float],
         tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
         tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] = (0, 24),
-    ) -> "RegularProjTilingSystem":
+    ) -> "RegularProjTilingSystem[T_co]":
         """Classmethod for creating a regular projected tiling system.
 
         Create a regular projected tiling system from a given extent, projection,

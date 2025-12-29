@@ -57,8 +57,8 @@ class RegularGrid(BaseModel, extra="allow"):
 
     """
 
-    _proj_defs: dict[str, ProjSystemDefinition] = PrivateAttr()
-    _tiling_defs: dict[int, RegularTilingDefinition] = PrivateAttr()
+    _proj_defs: Mapping[str, ProjSystemDefinition] = PrivateAttr()
+    _tiling_defs: Mapping[int, RegularTilingDefinition] = PrivateAttr()
 
     _rpts_cls = RegularProjTilingSystem
 
@@ -69,8 +69,8 @@ class RegularGrid(BaseModel, extra="allow"):
     @staticmethod
     def _create_rpts_from_def(
         proj_def: ProjSystemDefinition,
-        sampling: float | dict[int, float | int],
-        tiling_defs: dict[int, RegularTilingDefinition],
+        sampling: float | Mapping[int, float | int],
+        tiling_defs: Mapping[int, RegularTilingDefinition],
     ) -> RegularProjTilingSystem:
         """Create regular projected tiling system from grid definitions.
 
@@ -121,8 +121,8 @@ class RegularGrid(BaseModel, extra="allow"):
     def from_sampling(
         cls,
         sampling: float | dict[int | str, float | int],
-        proj_defs: dict[str, ProjSystemDefinition],
-        tiling_defs: dict[int, RegularTilingDefinition],
+        proj_defs: Mapping[str, ProjSystemDefinition],
+        tiling_defs: Mapping[int, RegularTilingDefinition],
     ) -> "RegularGrid":
         """Create a regular grid from grid definitions.
 
@@ -134,10 +134,10 @@ class RegularGrid(BaseModel, extra="allow"):
         sampling: float | int | Dict[int | str, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary with
             tiling IDs as keys and samplings as values.
-        proj_defs: dict[str, ProjSystemDefinition]
+        proj_defs: Mapping[str, ProjSystemDefinition]
             Projection system definitions (stores name, CRS, extent,
             and axis orientation).
-        tiling_defs: Dict[int, RegularTilingDefinition]
+        tiling_defs: Mapping[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
 
         Returns
@@ -253,7 +253,9 @@ class RegularGrid(BaseModel, extra="allow"):
 
     def _fetch_mod_grid_def(
         self,
-    ) -> tuple[dict[str, ProjSystemDefinition], dict[int, RegularTilingDefinition]]:
+    ) -> tuple[
+        Mapping[str, ProjSystemDefinition[T_co]], Mapping[int, RegularTilingDefinition]
+    ]:
         """Create regular grid system definitions.
 
         Create required regular tiling system definitions from the tiling systems
@@ -445,10 +447,10 @@ def write_grid_def(
     ----------
     json_path: Path
             Path to JSON file.
-    proj_defs: dict[str, ProjSystemDefinition]
+    proj_defs: Mapping[str, ProjSystemDefinition]
             Projection system definitions (stores name, CRS, extent,
             and axis orientation).
-    tiling_defs: Dict[int, RegularTilingDefinition]
+    tiling_defs: Mapping[int, RegularTilingDefinition]
         Tiling definition (stores name/tiling level and tile size).
 
     """
