@@ -12,4 +12,4 @@ AnyTile = RegularTile | IrregularTile
 TileGenerator = Generator[AnyTile, AnyTile, AnyTile]
 RegTileGenerator = Generator[RegularTile, RegularTile, RegularTile]
 IrregTileGenerator = Generator[IrregularTile, IrregularTile, IrregularTile]
-RasterTileGenerator = Generator[RasterTile, RasterTile, RasterTile]
+RasterTileGenerator = Generator[RasterTile[T_co], RasterTile[T_co], RasterTile[T_co]]

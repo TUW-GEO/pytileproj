@@ -124,7 +124,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         sampling: float | dict[int | str, float | int],
         proj_defs: Mapping[str, ProjSystemDefinition],
         tiling_defs: Mapping[int, RegularTilingDefinition],
-    ) -> "RegularGrid":
+    ) -> "RegularGrid"[T_co]:
         """Create a regular grid from grid definitions.
 
         Create a regular grid instance from given tiling system definitions
@@ -164,7 +164,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @classmethod
     def from_grid_def(
         cls, json_path: Path, sampling: float | dict[int | str, float | int]
-    ) -> "RegularGrid":
+    ) -> "RegularGrid"[T_co]:
         """Create a regular grid from a grid definition file.
 
         Create a regular grid instance from given tiling system definitions stored
@@ -202,7 +202,9 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
             tiling_defs=tiling_defs,
         )
 
-    def get_system_from_lonlat(self, lon: float, lat: float) -> RegularProjTilingSystem:
+    def get_system_from_lonlat(
+        self, lon: float, lat: float
+    ) -> RegularProjTilingSystem[T_co]:
         """Get regular, projected tiling system from geographic coordinates.
 
         Parameters
@@ -222,7 +224,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         coord = GeogCoord(x=lon, y=lat)
         return self.get_system_from_coord(coord)
 
-    def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem:
+    def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem[T_co]:
         """Get regular, projected tiling system from projected coordinates.
 
         Parameters
@@ -351,7 +353,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         return rgrid
 
     @classmethod
-    def from_file(cls, json_path: Path) -> "RegularGrid":
+    def from_file(cls, json_path: Path) -> "RegularGrid"[T_co]:
         """Create a regular grid instance from a file.
 
         Create a regular grid instance from its JSON representation stored
@@ -411,7 +413,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
-    def __getitem__(self, arg: str | ProjCoord) -> RegularProjTilingSystem:
+    def __getitem__(self, arg: str | ProjCoord) -> RegularProjTilingSystem[T_co]:
         """Return a regular, projected tiling system instance.
 
         Parameters

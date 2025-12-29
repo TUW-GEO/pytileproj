@@ -29,7 +29,7 @@
 """Tile module defining regular and irregular tiles."""
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union, cast
 
 import numpy as np
 import orjson
@@ -62,9 +62,10 @@ if VIS_INSTALLED:
 
 __all__ = ["RasterTile"]
 Extent = tuple[int | float, int | float, int | float, int | float]
+T_co = TypeVar("T_co", covariant=True)
 
 
-class IrregularTile(BaseModel):
+class IrregularTile(BaseModel, Generic[T_co]):
     """Defines an irregular tile (arbitrary extent) at a specific zoom/tiling level."""
 
     name: str
@@ -151,7 +152,7 @@ def _align_geom():  # noqa: ANN202
     return decorator
 
 
-class RasterTile(BaseModel):
+class RasterTile(BaseModel, Generic[T_co]):
     """Defines a raster tile geometry located in a certain projection."""
 
     crs: Any

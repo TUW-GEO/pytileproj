@@ -1587,7 +1587,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             child_tilename = self._tile_to_name(child_tile)
             yield self._tile_to_raster_tile(child_tile, name=child_tilename)
 
-    def get_parent_from_name(self, tilename: str) -> RasterTile:
+    def get_parent_from_name(self, tilename: str) -> RasterTile[T_co]:
         """Get parent tile (next lower zoom level).
 
         Parameters
