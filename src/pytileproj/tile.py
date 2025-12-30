@@ -28,8 +28,9 @@
 
 """Tile module defining regular and irregular tiles."""
 
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import numpy as np
 import orjson
@@ -57,8 +58,9 @@ if VIS_INSTALLED:
     from matplotlib.patches import Polygon as PolygonPatch
 
     if TYPE_CHECKING:
-        from cartopy.mpl.geoaxes import GeoAxes
+        from collections.abc import Callable, Sequence
 
+        from cartopy.mpl.geoaxes import GeoAxes
 
 __all__ = ["RasterTile"]
 Extent = tuple[int | float, int | float, int | float, int | float]
@@ -129,8 +131,8 @@ def _align_geom():  # noqa: ANN202
         """
 
         def wrapper(  # noqa: ANN202
-            self: "RasterTile",
-            arg: Union[ProjGeom, "RasterTile"],
+            self: RasterTile,
+            arg: ProjGeom | RasterTile,
             *args: Sequence[Any],
             **kwargs: dict[str, Any],
         ):
@@ -187,7 +189,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RasterTile"[T_co]:
+    ) -> RasterTile[T_co]:
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
@@ -235,7 +237,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RasterTile"[T_co]:
+    ) -> RasterTile[T_co]:
         """Create a raster tile object from an existing geometry object.
 
         Since a raster tile can represent rectangles only, non-rectangular
@@ -277,7 +279,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "RasterTile"[T_co]:
+    def from_json(cls, json_str: str) -> RasterTile[T_co]:
         """Create raster tile from JSON str.
 
         Parameters
@@ -591,7 +593,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         return self._boundary.geom
 
     @_align_geom()
-    def intersects(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def intersects(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile instance and another geometry intersect.
 
         Parameters
@@ -608,7 +610,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         return bool(shapely.intersects(self._boundary.geom, other.geom))
 
     @_align_geom()
-    def touches(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def touches(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile instance and another geometry touch each other.
 
         Parameters
@@ -630,7 +632,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @_align_geom()
-    def within(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def within(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile is fully within another geometry.
 
         Parameters
@@ -647,7 +649,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         return bool(shapely.within(self._boundary.geom, other.geom))
 
     @_align_geom()
-    def overlaps(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def overlaps(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if a geometry overlaps with the raster tile.
 
         Parameters
@@ -746,7 +748,7 @@ class RasterTile(BaseModel, Generic[T_co]):
     def plot(  # noqa: PLR0913
         self,
         *,
-        ax: Union["GeoAxes", None] = None,
+        ax: GeoAxes | None = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
         edgewidth: float = 1,
@@ -757,7 +759,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         add_country_borders: bool = True,
         extent: Extent | None = None,
         extent_proj: Any = None,  # noqa: ANN401
-    ) -> Union["GeoAxes", None]:
+    ) -> GeoAxes | None:
         """Plot the boundary of the raster tile on a map.
 
         Parameters
@@ -874,7 +876,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         return ProjGeom(geom=boundary, crs=self.crs)
 
     @_align_geom()
-    def __contains__(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def __contains__(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the given geometry is fully within the raster tile.
 
         Parameters
@@ -897,7 +899,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
         return hash((this_corners, self.n_rows, self.n_cols))
 
-    def __eq__(self, other: "RasterTile") -> bool:  # ty: ignore[invalid-method-override]
+    def __eq__(self, other: RasterTile) -> bool:  # ty: ignore[invalid-method-override]
         """Check if this and another raster tile are equal.
 
         Equality holds true if the vertices, rows and columns are the same.

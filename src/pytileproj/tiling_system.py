@@ -28,10 +28,10 @@
 
 """Tiling system module defining a irregular and regular tiling systems."""
 
+from __future__ import annotations
+
 import json
-from collections.abc import Mapping
-from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Union, cast
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, cast
 
 import numpy as np
 import orjson
@@ -79,6 +79,10 @@ from pytileproj.projgeom import (
 from pytileproj.tile import IrregularTile, RasterTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
 if VIS_INSTALLED:
     import cartopy
     import cartopy.feature
@@ -108,7 +112,7 @@ __all__ = [
 def tiling_access(f):  # noqa: ANN001, ANN201
     """Map tiling ID to tiling level."""
 
-    def wrapper(self: "TilingSystem", *args: int | str, **kwargs: int | str) -> Any:  # noqa: ANN401
+    def wrapper(self: TilingSystem, *args: int | str, **kwargs: int | str) -> Any:  # noqa: ANN401
         use_args = f.__name__ == "__getitem__"
         tiling_id = args[0] if use_args else kwargs.get("tiling_id")
         tiling_level = self.tiling_id_to_level(tiling_id)
@@ -304,7 +308,7 @@ class TilingSystem(BaseModel):
         }
 
     @classmethod
-    def from_file(cls, json_path: Path) -> "TilingSystem":
+    def from_file(cls, json_path: Path) -> TilingSystem:
         """Initialise tiling system class from the settings stored within a JSON file.
 
         Parameters
@@ -624,7 +628,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
     def plot(  # noqa: C901, PLR0913
         self,
         *,
-        ax: Union["GeoAxes", None] = None,
+        ax: GeoAxes | None = None,
         tiling_id: int | str | None = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
@@ -638,7 +642,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         extent: Extent | None = None,
         extent_proj: Any = None,  # noqa: ANN401
         plot_zone: bool = False,
-    ) -> "GeoAxes":
+    ) -> GeoAxes:
         """Plot all tiles at a specific tiling level.
 
         Parameters
@@ -1064,11 +1068,11 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | dict[int, float | int],
+        sampling: float | Mapping[int, float | int],
         proj_def: ProjSystemDefinition,
         tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401
-    ) -> "RegularProjTilingSystem"[T_co]:
+    ) -> RegularProjTilingSystem[T_co]:
         """Classmethod for creating a regular, projected tiling system.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -1106,7 +1110,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             tiling = RegularTiling(
                 name=tiling_def.name,
                 extent=extent,
-                sampling=s,
+                sampling=cast("int | float", s),
                 tile_shape=cast("tuple", tiling_def.tile_shape),
                 tiling_level=tiling_level,
                 axis_orientation=proj_def.axis_orientation,
@@ -1122,7 +1126,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         )
 
     @model_validator(mode="after")
-    def check_tilings(self) -> "RegularProjTilingSystem[T_co]":
+    def check_tilings(self) -> RegularProjTilingSystem[T_co]:
         """Validate if different regular tilings are compliant with each other."""
         validate_regular_tilings(self.tilings)
         return self
@@ -1229,7 +1233,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         extent: tuple[float, float, float, float],
         tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
         tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] = (0, 24),
-    ) -> "RegularProjTilingSystem[T_co]":
+    ) -> RegularProjTilingSystem[T_co]:
         """Classmethod for creating a regular projected tiling system.
 
         Create a regular projected tiling system from a given extent, projection,

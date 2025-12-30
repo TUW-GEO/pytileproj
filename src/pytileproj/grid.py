@@ -28,10 +28,10 @@
 
 """Grid module defining regular and irregular grids."""
 
+from __future__ import annotations
+
 import json
-from collections.abc import Mapping
-from pathlib import Path
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
 import orjson
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
@@ -46,6 +46,10 @@ from pytileproj.tiling_system import (
     RegularProjTilingSystem,
     RegularTilingDefinition,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
 
 __all__ = ["RegularGrid"]
 
@@ -124,7 +128,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         sampling: float | dict[int | str, float | int],
         proj_defs: Mapping[str, ProjSystemDefinition],
         tiling_defs: Mapping[int, RegularTilingDefinition],
-    ) -> "RegularGrid"[T_co]:
+    ) -> RegularGrid[T_co]:
         """Create a regular grid from grid definitions.
 
         Create a regular grid instance from given tiling system definitions
@@ -164,7 +168,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @classmethod
     def from_grid_def(
         cls, json_path: Path, sampling: float | dict[int | str, float | int]
-    ) -> "RegularGrid"[T_co]:
+    ) -> RegularGrid[T_co]:
         """Create a regular grid from a grid definition file.
 
         Create a regular grid instance from given tiling system definitions stored
@@ -321,9 +325,9 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @staticmethod
     def _validate_json(
         grid_def: str,
-        rgrid_cls: "RegularGrid",
+        rgrid_cls: RegularGrid,
         rpts_cls: RegularProjTilingSystem,
-    ) -> "RegularGrid":
+    ) -> RegularGrid[T_co]:
         """Create a regular grid object from the JSON class representation.
 
         Parameters
@@ -353,7 +357,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         return rgrid
 
     @classmethod
-    def from_file(cls, json_path: Path) -> "RegularGrid"[T_co]:
+    def from_file(cls, json_path: Path) -> RegularGrid[T_co]:
         """Create a regular grid instance from a file.
 
         Create a regular grid instance from its JSON representation stored
