@@ -673,6 +673,9 @@ def convert_any_to_geog_geom(
             with arg.open() as f:
                 geom = shapely.from_geojson(f.read())
         elif arg.suffix == ".parquet":
+            if not GEO_INSTALLED:
+                err_msg = "It is required to install the 'geo' extension."
+                raise ImportError(err_msg)
             geom = gpd.read_parquet(arg)["geometry"][0]
         else:
             err_msg = (
