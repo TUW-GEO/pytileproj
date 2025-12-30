@@ -31,7 +31,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Self, TypeVar, cast
 
 import numpy as np
 import orjson
@@ -57,6 +57,7 @@ from pytileproj._const import (
 )
 from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj._types import (
+    RT,
     AnyTile,
     Extent,
     RasterTileGenerator,
@@ -78,6 +79,9 @@ from pytileproj.projgeom import (
 )
 from pytileproj.tile import IrregularTile, RasterTile
 from pytileproj.tiling import IrregularTiling, RegularTiling
+
+RPTS = TypeVar("RPTS", bound="RegularProjTilingSystem[Any]")
+PSD = TypeVar("PSD", bound="ProjSystemDefinition[Any]")
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -420,7 +424,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
     def get_tile_from_lonlat(
         self, lon: float, lat: float, tiling_id: int | str | None = None
-    ) -> RasterTile:
+    ) -> RT:
         """Get a raster tile object from geographic coordinates.
 
         Parameters
@@ -444,7 +448,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
     def get_tile_from_xy(
         self, x: float, y: float, tiling_id: int | str | None = None
-    ) -> RasterTile:
+    ) -> RT:
         """Get a raster tile object from projected coordinates.
 
         Parameters
@@ -468,7 +472,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
 
     def get_tile_from_coord(
         self, coord: ProjCoord, tiling_id: int | str | None = None
-    ) -> RasterTile:
+    ) -> RT:
         """Get a raster tile object from projected coordinates.
 
         Parameters
@@ -513,7 +517,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def _tile_in_zone(self, tile: RasterTile) -> bool:
+    def _tile_in_zone(self, tile: RT) -> bool:
         """Check if the given tile is within the projection zone.
 
         Parameters
@@ -529,9 +533,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         return shapely.intersects(tile.boundary.geom, self._proj_zone.geom)
 
-    def _tile_to_raster_tile(
-        self, tile: AnyTile, name: str | None = None
-    ) -> RasterTile:
+    def _tile_to_raster_tile(self, tile: AnyTile, name: str | None = None) -> RT:
         """Create a raster tile object from a given regular tile.
 
         Parameters
@@ -577,7 +579,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def get_tile_mask(self, raster_tile: RasterTile) -> np.ndarray:
+    def get_tile_mask(self, raster_tile: RT) -> np.ndarray:
         """Compute tile mask w.r.t. projection zone.
 
         Compute a binary array representation of the given raster tile, where each
@@ -1033,7 +1035,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
     @staticmethod
     def _get_extent_from_proj(
-        proj_def: ProjSystemDefinition, tiling_def: RegularTilingDefinition
+        proj_def: PSD, tiling_def: RegularTilingDefinition
     ) -> Extent:
         if proj_def.max_xy is None or proj_def.min_xy is None:
             pyproj_crs = pyproj.CRS.from_user_input(proj_def.crs)
@@ -1069,10 +1071,10 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
     def from_sampling(
         cls,
         sampling: float | Mapping[int, float | int],
-        proj_def: ProjSystemDefinition,
+        proj_def: PSD,
         tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401
-    ) -> RegularProjTilingSystem[T_co]:
+    ) -> Self:
         """Classmethod for creating a regular, projected tiling system.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -1126,7 +1128,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         )
 
     @model_validator(mode="after")
-    def check_tilings(self) -> RegularProjTilingSystem[T_co]:
+    def check_tilings(self) -> Self:
         """Validate if different regular tilings are compliant with each other."""
         validate_regular_tilings(self.tilings)
         return self
@@ -1233,7 +1235,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         extent: tuple[float, float, float, float],
         tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
         tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] = (0, 24),
-    ) -> RegularProjTilingSystem[T_co]:
+    ) -> RPTS:
         """Classmethod for creating a regular projected tiling system.
 
         Create a regular projected tiling system from a given extent, projection,
@@ -1319,7 +1321,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         y = int(tilename.split("Y")[1].split("T")[0])
         return RegularTile(x, y, tiling_level)
 
-    def get_tile_from_index(self, x: int, y: int, tiling_level: int) -> RasterTile:
+    def get_tile_from_index(self, x: int, y: int, tiling_level: int) -> RT:
         """Get a raster tile object from the given tile index.
 
         Parameters
@@ -1346,7 +1348,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         return raster_tile
 
     @tiling_access
-    def get_tile_from_coord(self, coord: ProjCoord, tiling_id: int = 0) -> RasterTile:
+    def get_tile_from_coord(self, coord: ProjCoord, tiling_id: int = 0) -> RT:
         """Get a raster tile object from projected coordinates.
 
         Parameters
@@ -1372,9 +1374,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         tilename = self._tile_to_name(tile)
         return self._tile_to_raster_tile(tile, name=tilename)
 
-    def _tile_to_raster_tile(
-        self, tile: AnyTile, name: str | None = None
-    ) -> RasterTile:
+    def _tile_to_raster_tile(self, tile: AnyTile, name: str | None = None) -> RT:
         """Create a raster tile object from a given regular tile.
 
         Parameters
@@ -1591,7 +1591,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             child_tilename = self._tile_to_name(child_tile)
             yield self._tile_to_raster_tile(child_tile, name=child_tilename)
 
-    def get_parent_from_name(self, tilename: str) -> RasterTile[T_co]:
+    def get_parent_from_name(self, tilename: str) -> RT:
         """Get parent tile (next lower zoom level).
 
         Parameters
@@ -1644,9 +1644,7 @@ class IrregularProjTilingSystem(ProjTilingSystem):
         tiling_level = self._tilename_to_level(tilename)
         return self[tiling_level].tiles[tilename]
 
-    def _tile_to_raster_tile(
-        self, tile: AnyTile, name: str | None = None
-    ) -> RasterTile:
+    def _tile_to_raster_tile(self, tile: AnyTile, name: str | None = None) -> RT:
         """Create a raster tile object from a given irregular tile.
 
         Parameters

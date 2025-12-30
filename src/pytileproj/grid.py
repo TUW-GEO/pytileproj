@@ -31,7 +31,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 import orjson
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
@@ -42,6 +42,8 @@ from pytileproj._types import RasterTileGenerator, T_co
 from pytileproj.projgeom import GeogCoord, ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
+    PSD,
+    RPTS,
     ProjSystemDefinition,
     RegularProjTilingSystem,
     RegularTilingDefinition,
@@ -50,6 +52,8 @@ from pytileproj.tiling_system import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
+
+RG = TypeVar("RG", bound="RegularGrid[Any]")
 
 __all__ = ["RegularGrid"]
 
@@ -76,7 +80,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         proj_def: ProjSystemDefinition,
         sampling: float | Mapping[int, float | int],
         tiling_defs: Mapping[int, RegularTilingDefinition],
-    ) -> RegularProjTilingSystem[T_co]:
+    ) -> RPTS:
         """Create regular projected tiling system from grid definitions.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -128,7 +132,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         sampling: float | dict[int | str, float | int],
         proj_defs: Mapping[str, ProjSystemDefinition],
         tiling_defs: Mapping[int, RegularTilingDefinition],
-    ) -> RegularGrid[T_co]:
+    ) -> Self:
         """Create a regular grid from grid definitions.
 
         Create a regular grid instance from given tiling system definitions
@@ -168,7 +172,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @classmethod
     def from_grid_def(
         cls, json_path: Path, sampling: float | dict[int | str, float | int]
-    ) -> RegularGrid[T_co]:
+    ) -> Self:
         """Create a regular grid from a grid definition file.
 
         Create a regular grid instance from given tiling system definitions stored
@@ -206,9 +210,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
             tiling_defs=tiling_defs,
         )
 
-    def get_system_from_lonlat(
-        self, lon: float, lat: float
-    ) -> RegularProjTilingSystem[T_co]:
+    def get_system_from_lonlat(self, lon: float, lat: float) -> RPTS:
         """Get regular, projected tiling system from geographic coordinates.
 
         Parameters
@@ -228,7 +230,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         coord = GeogCoord(x=lon, y=lat)
         return self.get_system_from_coord(coord)
 
-    def get_system_from_coord(self, coord: ProjCoord) -> RegularProjTilingSystem[T_co]:
+    def get_system_from_coord(self, coord: ProjCoord) -> RPTS:
         """Get regular, projected tiling system from projected coordinates.
 
         Parameters
@@ -327,7 +329,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         grid_def: str,
         rgrid_cls: RegularGrid,
         rpts_cls: RegularProjTilingSystem,
-    ) -> RegularGrid[T_co]:
+    ) -> RG:
         """Create a regular grid object from the JSON class representation.
 
         Parameters
@@ -357,7 +359,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         return rgrid
 
     @classmethod
-    def from_file(cls, json_path: Path) -> RegularGrid[T_co]:
+    def from_file(cls, json_path: Path) -> Self:
         """Create a regular grid instance from a file.
 
         Create a regular grid instance from its JSON representation stored
@@ -417,7 +419,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
-    def __getitem__(self, arg: str | ProjCoord) -> RegularProjTilingSystem[T_co]:
+    def __getitem__(self, arg: str | ProjCoord) -> RPTS:
         """Return a regular, projected tiling system instance.
 
         Parameters
@@ -445,7 +447,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
 
 def write_grid_def(
     json_path: Path,
-    proj_defs: Mapping[str, ProjSystemDefinition[T_co]],
+    proj_defs: Mapping[str, PSD],
     tiling_defs: Mapping[int, RegularTilingDefinition],
 ) -> None:
     """Write grid definitions to a JSON file.

@@ -30,7 +30,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, cast
 
 import numpy as np
 import orjson
@@ -65,6 +65,7 @@ if VIS_INSTALLED:
 __all__ = ["RasterTile"]
 Extent = tuple[int | float, int | float, int | float, int | float]
 T_co = TypeVar("T_co", covariant=True)
+RT = TypeVar("RT", bound="RasterTile[Any]")
 
 
 class IrregularTile(BaseModel, Generic[T_co]):
@@ -189,7 +190,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> RasterTile[T_co]:
+    ) -> Self:
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
@@ -237,7 +238,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> RasterTile[T_co]:
+    ) -> Self:
         """Create a raster tile object from an existing geometry object.
 
         Since a raster tile can represent rectangles only, non-rectangular
@@ -279,7 +280,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> RasterTile[T_co]:
+    def from_json(cls, json_str: str) -> Self:
         """Create raster tile from JSON str.
 
         Parameters
