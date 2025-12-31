@@ -34,7 +34,7 @@ from typing import Annotated, Any, Literal
 
 import numpy as np
 import shapely
-from morecantile.models import Tile as RegularTile
+from morecantile.commons import Tile as RegularTile
 from morecantile.models import TileMatrix
 from pydantic import (
     AfterValidator,

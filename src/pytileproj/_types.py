@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from typing import Any, TypeAlias, TypeVar
 
-from morecantile.models import Tile as RegularTile
+from morecantile.commons import Tile as RegularTile
 
 from pytileproj.tile import IrregularTile, RasterTile
 

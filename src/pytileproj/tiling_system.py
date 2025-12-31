@@ -38,7 +38,7 @@ import orjson
 import pyproj
 import shapely
 from antimeridian import fix_polygon
-from morecantile.models import Tile as RegularTile
+from morecantile.commons import Tile as RegularTile
 from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
