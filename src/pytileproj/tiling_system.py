@@ -34,6 +34,7 @@ import json
 from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Self, TypeVar, cast
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import shapely
@@ -579,7 +580,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def get_tile_mask(self, raster_tile: RT) -> np.ndarray:
+    def get_tile_mask(self, raster_tile: RT) -> npt.NDArray[Any]:
         """Compute tile mask w.r.t. projection zone.
 
         Compute a binary array representation of the given raster tile, where each

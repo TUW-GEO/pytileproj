@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Annotated, Any, cast
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import requests
@@ -274,11 +275,11 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
 
 
 def transform_coords(
-    x: float | np.ndarray,
-    y: float | np.ndarray,
+    x: float | npt.NDArray[Any],
+    y: float | npt.NDArray[Any],
     this_crs: Any,  # noqa: ANN401
     other_crs: Any,  # noqa: ANN401
-) -> tuple[float | np.ndarray, float | np.ndarray]:
+) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
     """Transform coordinate tuple from a given to another projection.
 
     Parameters
@@ -307,8 +308,11 @@ def transform_coords(
 
 
 def xy2ij(
-    x: float | np.ndarray, y: float | np.ndarray, geotrans: tuple, origin: str = "ul"
-) -> tuple[int | np.ndarray, int | np.ndarray]:
+    x: float | npt.NDArray[Any],
+    y: float | npt.NDArray[Any],
+    geotrans: tuple,
+    origin: str = "ul",
+) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
     Parameters
@@ -388,8 +392,11 @@ def xy2ij(
 
 
 def ij2xy(
-    i: int | np.ndarray, j: int | np.ndarray, geotrans: tuple, origin: str = "ul"
-) -> tuple[float | np.ndarray, float | np.ndarray]:
+    i: int | npt.NDArray[Any],
+    j: int | npt.NDArray[Any],
+    geotrans: tuple,
+    origin: str = "ul",
+) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
     Parameters
@@ -470,7 +477,7 @@ def rasterise_polygon(
     x_pixel_size: float,
     y_pixel_size: float,
     extent: tuple | None = None,
-) -> np.ndarray:
+) -> npt.NDArray[Any]:
     """Rasterises a Shapely polygon defined by a clockwise list of points.
 
     Parameters

@@ -33,6 +33,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, cast
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import shapely
@@ -544,7 +545,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @property
-    def x_coords(self) -> np.ndarray:
+    def x_coords(self) -> npt.NDArray[Any]:
         """Return all coordinates in X direction."""
         if self.is_axis_parallel:
             min_x, _ = self.rc2xy(0, 0)
@@ -554,7 +555,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         return np.array(self.rc2xy(0, cols)[0])
 
     @property
-    def y_coords(self) -> np.ndarray:
+    def y_coords(self) -> npt.NDArray[Any]:
         """Return all coordinates in Y direction."""
         if self.is_axis_parallel:
             _, min_y = self.rc2xy(self.n_rows, 0)
@@ -564,7 +565,9 @@ class RasterTile(BaseModel, Generic[T_co]):
         return np.array(self.rc2xy(rows, 0)[1])
 
     @property
-    def xy_coords(self) -> tuple[np.ndarray | int | float, np.ndarray | int | float]:
+    def xy_coords(
+        self,
+    ) -> tuple[npt.NDArray[Any] | int | float, npt.NDArray[Any] | int | float]:
         """Return meshgrid of both X and Y coordinates."""
         if self.is_axis_parallel:
             x_coords, y_coords = np.meshgrid(
@@ -668,11 +671,11 @@ class RasterTile(BaseModel, Generic[T_co]):
 
     def xy2rc(
         self,
-        x: float | np.ndarray,
-        y: float | np.ndarray,
+        x: float | npt.NDArray[Any],
+        y: float | npt.NDArray[Any],
         crs: Any = None,  # noqa: ANN401
         px_origin: str | None = None,
-    ) -> tuple[int | np.ndarray, int | np.ndarray]:
+    ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
         """Convert world system to pixels coordinates.
 
         Calculate an index of a pixel in which a given point of a world system lies.
@@ -713,8 +716,11 @@ class RasterTile(BaseModel, Generic[T_co]):
         return r, c
 
     def rc2xy(
-        self, r: int | np.ndarray, c: int | np.ndarray, px_origin: str | None = None
-    ) -> tuple[float | np.ndarray, float | np.ndarray]:
+        self,
+        r: int | npt.NDArray[Any],
+        c: int | npt.NDArray[Any],
+        px_origin: str | None = None,
+    ) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
         """Convert pixels to world system coordinates.
 
         Returns the coordinates of the center or a corner (depending on

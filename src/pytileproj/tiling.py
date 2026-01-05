@@ -33,6 +33,7 @@ from enum import Enum
 from typing import Annotated, Any, Literal
 
 import numpy as np
+import numpy.typing as npt
 import shapely
 from morecantile.commons import Tile as RegularTile
 from morecantile.models import TileMatrix
@@ -192,7 +193,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         return self._tm.model_dump()
 
 
-def validate_adj_matrix(ar: np.ndarray | None) -> np.ndarray | None:
+def validate_adj_matrix(ar: npt.NDArray[Any] | None) -> npt.NDArray[Any] | None:
     """Test if input array representing an adjacency matrix is 2D.
 
     Parameters
@@ -225,11 +226,11 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     name: str
     tiles_map: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
-        np.ndarray | None, AfterValidator(validate_adj_matrix)
+        npt.NDArray[Any] | None, AfterValidator(validate_adj_matrix)
     ] = None
     tiling_level: int = 0
 
-    _adjacency_matrix: np.ndarray = PrivateAttr()
+    _adjacency_matrix: npt.NDArray[Any] = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the irregular tiling object."""
@@ -293,7 +294,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
             if shapely.intersects(tile.boundary, bbox):
                 yield tile
 
-    def _build_adjacency_matrix(self) -> np.ndarray:
+    def _build_adjacency_matrix(self) -> npt.NDArray[Any]:
         """Create adjacency matrix based on tiles touching each other."""
         n_tiles = len(self.tiles_map)
         adjacency_matrix = np.zeros((n_tiles, n_tiles), dtype=bool)
