@@ -680,7 +680,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: float,
         y: float,
-        crs: Any,  # noqa: ANN401
+        crs: Any | None,  # noqa: ANN401
         px_origin: OriginStr | None,
     ) -> tuple[int, int]: ...
 
@@ -689,7 +689,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: npt.NDArray[Any],
         y: float,
-        crs: Any,  # noqa: ANN401
+        crs: Any | None,  # noqa: ANN401
         px_origin: OriginStr | None,
     ) -> tuple[npt.NDArray[Any], int]: ...
 
@@ -698,7 +698,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: float,
         y: npt.NDArray[Any],
-        crs: Any,  # noqa: ANN401
+        crs: Any | None,  # noqa: ANN401
         px_origin: OriginStr | None,
     ) -> tuple[int, npt.NDArray[Any]]: ...
 
@@ -707,7 +707,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: npt.NDArray[Any],
         y: npt.NDArray[Any],
-        crs: Any,  # noqa: ANN401
+        crs: Any | None,  # noqa: ANN401
         px_origin: OriginStr | None,
     ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
@@ -756,6 +756,38 @@ class RasterTile(BaseModel, Generic[T_co]):
         px_origin = self.px_origin if px_origin is None else px_origin
         c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
         return r, c
+
+    @overload
+    def rc2xy(
+        self,
+        r: int,
+        c: int,
+        px_origin: OriginStr | None = None,
+    ) -> tuple[float, float]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: npt.NDArray[Any],
+        c: int,
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], float]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: int,
+        c: npt.NDArray[Any],
+        px_origin: OriginStr | None = None,
+    ) -> tuple[float, npt.NDArray[Any]]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: npt.NDArray[Any],
+        c: npt.NDArray[Any],
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
     def rc2xy(
         self,
