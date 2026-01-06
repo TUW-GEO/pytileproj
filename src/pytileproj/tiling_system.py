@@ -1108,6 +1108,11 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         tilings = {}
         for k, s in samplings.items():
             tiling_level, tiling_def = cls._get_tiling_from_id(tiling_defs, k)
+            # TODO: #000 Handle None cases of 'tiling_level' and 'tiling_def'  # noqa: E501, FIX002, TD002
+            if tiling_level is None:
+                continue
+            if tiling_def is None:
+                continue
             extent = cls._get_extent_from_proj(proj_def, tiling_def)
 
             tiling = RegularTiling(
