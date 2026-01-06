@@ -28,8 +28,7 @@
 
 """Tiling module defining classes for irregular and regular tilings."""
 
-from collections.abc import Generator
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 import numpy as np
@@ -46,13 +45,13 @@ from pydantic import (
 )
 from shapely.geometry import Polygon
 
-from pytileproj._types import IrregTileGenerator, RegTileGenerator
+from pytileproj._types import Extent, IrregTileGenerator, RegTileGenerator
 from pytileproj.tile import IrregularTile
 
 __all__ = []
 
 
-class CornerOfOrigin(Enum):
+class CornerOfOrigin(StrEnum):
     """Defines a corner of origin in an OGC compliant manner."""
 
     bottom_left = "bottomLeft"
@@ -265,8 +264,9 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
         return [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
     def tiles_intersecting_bbox(
-        self, bbox: tuple[float, float, float, float]
-    ) -> Generator[IrregularTile, IrregularTile, IrregularTile]:
+        self,
+        bbox: Extent,
+    ) -> IrregTileGenerator:
         """Return tiles intersecting with the given bounding box.
 
         Parameters
@@ -276,12 +276,12 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         Returns
         -------
-        Generator[IrregularTile, IrregularTile, IrregularTile]
+        Generator[IrregularTile, None, None]
             Yields tile after tile, which intersects with the given bounding box.
 
         """
         min_x, min_y, max_x, max_y = bbox
-        bbox = Polygon(
+        bbox_polygon = Polygon(
             [
                 (min_x, min_y),
                 (min_x, max_y),
@@ -291,7 +291,7 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
             ]
         )
         for tile in self.tiles_map.values():
-            if shapely.intersects(tile.boundary, bbox):
+            if shapely.intersects(tile.boundary, bbox_polygon):
                 yield tile
 
     def _build_adjacency_matrix(self) -> npt.NDArray[Any]:
