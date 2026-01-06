@@ -30,7 +30,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Literal,
+    Self,
+    TypeAlias,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -64,7 +74,10 @@ if VIS_INSTALLED:
         from cartopy.mpl.geoaxes import GeoAxes
 
 __all__ = ["RasterTile"]
-Extent = tuple[int | float, int | float, int | float, int | float]
+
+Extent = tuple[float, float, float, float]
+GeoTransformTuple: TypeAlias = tuple[float, float, float, float, float, float]
+OriginStr: TypeAlias = Literal["ul", "ur", "ll", "lr", "c"]
 T_co = TypeVar("T_co", covariant=True)
 RT = TypeVar("RT", bound="RasterTile[Any]")
 
@@ -162,15 +175,8 @@ class RasterTile(BaseModel, Generic[T_co]):
     crs: Any
     n_rows: NonNegativeInt
     n_cols: NonNegativeInt
-    geotrans: tuple[float, float, float, float, float, float] = (
-        0,
-        1,
-        0,
-        0,
-        0,
-        -1,
-    )
-    px_origin: str = "ul"
+    geotrans: GeoTransformTuple = (0, 1, 0, 0, 0, -1)
+    px_origin: OriginStr = "ul"
     name: str | None = None
 
     _boundary: ProjGeom = PrivateAttr()
@@ -669,12 +675,48 @@ class RasterTile(BaseModel, Generic[T_co]):
         """
         return bool(shapely.overlaps(self._boundary.geom, other.geom))
 
+    @overload
+    def xy2rc(
+        self,
+        x: float,
+        y: float,
+        crs: Any,  # noqa: ANN401
+        px_origin: OriginStr | None,
+    ) -> tuple[int, int]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: npt.NDArray[Any],
+        y: float,
+        crs: Any,  # noqa: ANN401
+        px_origin: OriginStr | None,
+    ) -> tuple[npt.NDArray[Any], int]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: float,
+        y: npt.NDArray[Any],
+        crs: Any,  # noqa: ANN401
+        px_origin: OriginStr | None,
+    ) -> tuple[int, npt.NDArray[Any]]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: npt.NDArray[Any],
+        y: npt.NDArray[Any],
+        crs: Any,  # noqa: ANN401
+        px_origin: OriginStr | None,
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
     def xy2rc(
         self,
         x: float | npt.NDArray[Any],
         y: float | npt.NDArray[Any],
-        crs: Any = None,  # noqa: ANN401
-        px_origin: str | None = None,
+        crs: Any = None,
+        px_origin: OriginStr | None = None,
     ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
         """Convert world system to pixels coordinates.
 
@@ -719,7 +761,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         r: int | npt.NDArray[Any],
         c: int | npt.NDArray[Any],
-        px_origin: str | None = None,
+        px_origin: OriginStr | None = None,
     ) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
         """Convert pixels to world system coordinates.
 
