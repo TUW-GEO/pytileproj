@@ -1,4 +1,4 @@
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from typing import Any, TypeAlias, TypeVar
 
 from morecantile.commons import Tile as RegularTile
@@ -14,3 +14,4 @@ TileGenerator: TypeAlias = Generator[AnyTile, None, None]
 RegTileGenerator: TypeAlias = Generator[RegularTile, None, None]
 IrregTileGenerator: TypeAlias = Generator[IrregularTile, None, None]
 RasterTileGenerator: TypeAlias = Generator[RasterTile[T_co], None, None]
+SamplingFloatOrMap: TypeAlias = float | Mapping[int, float]
