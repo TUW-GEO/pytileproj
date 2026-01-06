@@ -31,7 +31,7 @@
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, TypeAlias, cast, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -74,6 +74,9 @@ __all__ = [
     "transform_geometry",
     "xy2ij",
 ]
+
+GeoTransformTuple: TypeAlias = tuple[float, float, float, float, float, float]
+OriginStr: TypeAlias = Literal["ul", "ur", "ll", "lr", "c"]
 
 
 @dataclass(frozen=True)
@@ -307,11 +310,47 @@ def transform_coords(
     return traffo.transform(x, y)
 
 
+@overload
+def xy2ij(
+    x: float,
+    y: float,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, int]: ...
+
+
+@overload
+def xy2ij(
+    x: npt.NDArray[Any],
+    y: float,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], int]: ...
+
+
+@overload
+def xy2ij(
+    x: float,
+    y: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, npt.NDArray[Any]]: ...
+
+
+@overload
+def xy2ij(
+    x: npt.NDArray[Any],
+    y: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+
 def xy2ij(
     x: float | npt.NDArray[Any],
     y: float | npt.NDArray[Any],
-    geotrans: tuple,
-    origin: str = "ul",
+    geotrans: GeoTransformTuple,
+    origin: OriginStr = "ul",
 ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
@@ -391,11 +430,47 @@ def xy2ij(
     return i, j
 
 
+@overload
+def ij2xy(
+    i: int,
+    j: int,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, int]: ...
+
+
+@overload
+def ij2xy(
+    i: npt.NDArray[Any],
+    j: int,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], int]: ...
+
+
+@overload
+def ij2xy(
+    i: int,
+    j: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, npt.NDArray[Any]]: ...
+
+
+@overload
+def ij2xy(
+    i: npt.NDArray[Any],
+    j: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+
 def ij2xy(
     i: int | npt.NDArray[Any],
     j: int | npt.NDArray[Any],
-    geotrans: tuple,
-    origin: str = "ul",
+    geotrans: GeoTransformTuple,
+    origin: OriginStr = "ul",
 ) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
