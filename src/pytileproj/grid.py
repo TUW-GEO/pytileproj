@@ -38,7 +38,7 @@ from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
-from pytileproj._types import RasterTileGenerator, T_co
+from pytileproj._types import RasterTileGenerator, SamplingFloatOrMap, T_co
 from pytileproj.projgeom import GeogCoord, ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
@@ -103,7 +103,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
             Regular, projected tiling system instance.
 
         """
-        return RegularProjTilingSystem.from_sampling(
+        return RegularProjTilingSystem.from_sampling(  # type: ignore[reportReturnType]
             sampling,
             proj_def,
             tiling_defs,
@@ -129,7 +129,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | dict[int | str, float | int],
+        sampling: SamplingFloatOrMap,
         proj_defs: Mapping[str, ProjSystemDefinition],
         tiling_defs: Mapping[int, RegularTilingDefinition],
     ) -> Self:
@@ -171,7 +171,9 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
 
     @classmethod
     def from_grid_def(
-        cls, json_path: Path, sampling: float | dict[int | str, float | int]
+        cls,
+        json_path: Path,
+        sampling: SamplingFloatOrMap,
     ) -> Self:
         """Create a regular grid from a grid definition file.
 
@@ -379,7 +381,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         with json_path.open() as f:
             pp_def = f.read()
 
-        return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
+        return cls._validate_json(pp_def, cls, cls._rpts_cls.default)  # type: ignore[reportArgumentType]
 
     def get_tiles_in_geog_bbox(
         self,

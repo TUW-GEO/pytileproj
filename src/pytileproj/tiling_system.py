@@ -34,11 +34,12 @@ import json
 from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Self, TypeVar, cast
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import shapely
 from antimeridian import fix_polygon
-from morecantile.models import Tile as RegularTile
+from morecantile.commons import Tile as RegularTile
 from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
@@ -579,7 +580,7 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         """
         raise NotImplementedError
 
-    def get_tile_mask(self, raster_tile: RT) -> np.ndarray:
+    def get_tile_mask(self, raster_tile: RT) -> npt.NDArray[Any]:
         """Compute tile mask w.r.t. projection zone.
 
         Compute a binary array representation of the given raster tile, where each
@@ -1107,6 +1108,11 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         tilings = {}
         for k, s in samplings.items():
             tiling_level, tiling_def = cls._get_tiling_from_id(tiling_defs, k)
+            # TODO: #000 Handle None cases of 'tiling_level' and 'tiling_def'  # noqa: E501, FIX002, TD002
+            if tiling_level is None:
+                continue
+            if tiling_def is None:
+                continue
             extent = cls._get_extent_from_proj(proj_def, tiling_def)
 
             tiling = RegularTiling(

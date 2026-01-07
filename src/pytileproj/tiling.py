@@ -28,13 +28,13 @@
 
 """Tiling module defining classes for irregular and regular tilings."""
 
-from collections.abc import Generator
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 import numpy as np
+import numpy.typing as npt
 import shapely
-from morecantile.models import Tile as RegularTile
+from morecantile.commons import Tile as RegularTile
 from morecantile.models import TileMatrix
 from pydantic import (
     AfterValidator,
@@ -45,13 +45,13 @@ from pydantic import (
 )
 from shapely.geometry import Polygon
 
-from pytileproj._types import IrregTileGenerator, RegTileGenerator
+from pytileproj._types import Extent, IrregTileGenerator, RegTileGenerator
 from pytileproj.tile import IrregularTile
 
 __all__ = []
 
 
-class CornerOfOrigin(Enum):
+class CornerOfOrigin(StrEnum):
     """Defines a corner of origin in an OGC compliant manner."""
 
     bottom_left = "bottomLeft"
@@ -192,7 +192,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         return self._tm.model_dump()
 
 
-def validate_adj_matrix(ar: np.ndarray | None) -> np.ndarray | None:
+def validate_adj_matrix(ar: npt.NDArray[Any] | None) -> npt.NDArray[Any] | None:
     """Test if input array representing an adjacency matrix is 2D.
 
     Parameters
@@ -225,11 +225,11 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
     name: str
     tiles_map: dict[str, IrregularTile]
     adjacency_matrix: Annotated[
-        np.ndarray | None, AfterValidator(validate_adj_matrix)
+        npt.NDArray[Any] | None, AfterValidator(validate_adj_matrix)
     ] = None
     tiling_level: int = 0
 
-    _adjacency_matrix: np.ndarray = PrivateAttr()
+    _adjacency_matrix: npt.NDArray[Any] = PrivateAttr()
 
     def model_post_init(self, context: Any) -> None:  # noqa: ANN401
         """Initialise remaining parts of the irregular tiling object."""
@@ -264,8 +264,9 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
         return [self[tile_id] for tile_id in np.array(self.tile_ids)[nbr_idxs]]
 
     def tiles_intersecting_bbox(
-        self, bbox: tuple[float, float, float, float]
-    ) -> Generator[IrregularTile, IrregularTile, IrregularTile]:
+        self,
+        bbox: Extent,
+    ) -> IrregTileGenerator:
         """Return tiles intersecting with the given bounding box.
 
         Parameters
@@ -275,12 +276,12 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
 
         Returns
         -------
-        Generator[IrregularTile, IrregularTile, IrregularTile]
+        Generator[IrregularTile, None, None]
             Yields tile after tile, which intersects with the given bounding box.
 
         """
         min_x, min_y, max_x, max_y = bbox
-        bbox = Polygon(
+        bbox_polygon = Polygon(
             [
                 (min_x, min_y),
                 (min_x, max_y),
@@ -290,10 +291,10 @@ class IrregularTiling(BaseModel, arbitrary_types_allowed=True):
             ]
         )
         for tile in self.tiles_map.values():
-            if shapely.intersects(tile.boundary, bbox):
+            if shapely.intersects(tile.boundary, bbox_polygon):
                 yield tile
 
-    def _build_adjacency_matrix(self) -> np.ndarray:
+    def _build_adjacency_matrix(self) -> npt.NDArray[Any]:
         """Create adjacency matrix based on tiles touching each other."""
         n_tiles = len(self.tiles_map)
         adjacency_matrix = np.zeros((n_tiles, n_tiles), dtype=bool)
