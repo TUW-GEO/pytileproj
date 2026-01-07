@@ -44,7 +44,6 @@ from morecantile.models import TileMatrixSet
 from pydantic import (
     AfterValidator,
     BaseModel,
-    NonNegativeInt,
     PrivateAttr,
     model_validator,
 )
@@ -83,6 +82,7 @@ from pytileproj.tiling import IrregularTiling, RegularTiling
 
 RPTS = TypeVar("RPTS", bound="RegularProjTilingSystem[Any]")
 PSD = TypeVar("PSD", bound="ProjSystemDefinition[Any]")
+RPTST = type[RPTS]
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -1070,12 +1070,12 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
     @classmethod
     def from_sampling(
-        cls,
+        cls: RPTST,
         sampling: float | Mapping[int, float | int],
         proj_def: PSD,
         tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401
-    ) -> Self:
+    ) -> RPTS:
         """Classmethod for creating a regular, projected tiling system.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -1232,61 +1232,6 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         """
         return self.n_tiles_x(tiling_id) * self.n_tiles_y(tiling_id)
-
-    @classmethod
-    def default(
-        cls,
-        name: str,
-        epsg: int,
-        extent: tuple[float, float, float, float],
-        tile_shape_px: tuple[NonNegativeInt, NonNegativeInt],
-        tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] = (0, 24),
-    ) -> RPTS:
-        """Classmethod for creating a regular projected tiling system.
-
-        Create a regular projected tiling system from a given extent, projection,
-        and tile shape. morecantile's `TileMatrixSet` class is used in the
-        background.
-
-        Parameters
-        ----------
-        name: str
-            Name of the tiling system.
-        epsg: int
-            Projection of the tiling system given as an EPSG code.
-        extent: tuple[float, float, float, float]
-            Extent of the tiling system (x_min, y_min, x_max, y_max).
-        tile_shape_px: tuple[NonNegativeInt, NonNegativeInt]
-            Shape of a tile in pixels (number of rows, number of columns).
-        tiling_level_limits: tuple[NonNegativeInt, NonNegativeInt] | None, optional
-            Lower and upper tiling/zoom level limits. Defaults to (0, 24).
-
-        Returns
-        -------
-        RegularProjTilingSystem
-            Regular projected tiling system.
-
-        """
-        min_zoom, max_zoom = tiling_level_limits
-        tms = TileMatrixSet.custom(
-            list(extent),
-            pyproj.CRS(epsg),
-            tile_width=tile_shape_px[0],
-            tile_height=tile_shape_px[1],
-            minzoom=min_zoom,
-            maxzoom=max_zoom,
-        )
-        tilings = []
-        for i, tm in enumerate(tms.tileMatrices):
-            tiling = RegularTiling(
-                name=str(i),
-                extent=tms.bbox,
-                sampling=tm.cellSize,
-                tile_shape=(tm.cellSize * tm.tileWidth, tm.cellSize * tm.tileHeight),
-            )
-            tilings.append(tiling)
-
-        return cls(name, epsg, tilings)
 
     def _tile_to_name(self, tile: AnyTile) -> str:
         """Create a tilename from a given regular tile object.

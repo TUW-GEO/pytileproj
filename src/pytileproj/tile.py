@@ -35,7 +35,6 @@ from typing import (
     Any,
     Generic,
     Literal,
-    Self,
     TypeAlias,
     TypeVar,
     cast,
@@ -80,6 +79,7 @@ GeoTransformTuple: TypeAlias = tuple[float, float, float, float, float, float]
 OriginStr: TypeAlias = Literal["ul", "ur", "ll", "lr", "c"]
 T_co = TypeVar("T_co", covariant=True)
 RT = TypeVar("RT", bound="RasterTile[Any]")
+RTT = type[RT]
 
 
 class IrregularTile(BaseModel, Generic[T_co]):
@@ -190,14 +190,14 @@ class RasterTile(BaseModel, Generic[T_co]):
 
     @classmethod
     def from_extent(
-        cls,
+        cls: RTT,
         extent: Extent,
         crs: Any,  # noqa: ANN401
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> Self:
+    ) -> RT:
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
@@ -239,13 +239,13 @@ class RasterTile(BaseModel, Generic[T_co]):
 
     @classmethod
     def from_geometry(
-        cls,
+        cls: RTT,
         proj_geom: ProjGeom,
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> Self:
+    ) -> RT:
         """Create a raster tile object from an existing geometry object.
 
         Since a raster tile can represent rectangles only, non-rectangular
@@ -287,7 +287,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> Self:
+    def from_json(cls: RTT, json_str: str) -> RT:
         """Create raster tile from JSON str.
 
         Parameters
@@ -680,8 +680,8 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: float,
         y: float,
-        crs: Any | None,  # noqa: ANN401
-        px_origin: OriginStr | None,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
     ) -> tuple[int, int]: ...
 
     @overload
@@ -689,8 +689,8 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: npt.NDArray[Any],
         y: float,
-        crs: Any | None,  # noqa: ANN401
-        px_origin: OriginStr | None,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
     ) -> tuple[npt.NDArray[Any], int]: ...
 
     @overload
@@ -698,8 +698,8 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: float,
         y: npt.NDArray[Any],
-        crs: Any | None,  # noqa: ANN401
-        px_origin: OriginStr | None,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
     ) -> tuple[int, npt.NDArray[Any]]: ...
 
     @overload
@@ -707,15 +707,15 @@ class RasterTile(BaseModel, Generic[T_co]):
         self,
         x: npt.NDArray[Any],
         y: npt.NDArray[Any],
-        crs: Any | None,  # noqa: ANN401
-        px_origin: OriginStr | None,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
     ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
     def xy2rc(
         self,
         x: float | npt.NDArray[Any],
         y: float | npt.NDArray[Any],
-        crs: Any = None,
+        crs: Any | None = None,
         px_origin: OriginStr | None = None,
     ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
         """Convert world system to pixels coordinates.
