@@ -20,17 +20,22 @@ Projected tiling systems define a tiling scheme for multiple levels (tiling or z
 
 ## Installation
 
-This package should be installable through pip:
+This package can be installed via pip:
 
 ```bash
 pip install pytileproj
 ```
 
-Install for `gdal` is required to be in place (can be installed via conda, mamba, or directly from a wheel).
 If you want to use `pytileproj`'s visualisation features, then you can install the required optional dependencies with:
 
 ```bash
 pip install pytileproj[vis]
+```
+
+If you want to export tile tables and shapefiles, then you need to install the `geo` extension:
+
+```bash
+pip install pytileproj[geo]
 ```
 
 ## Contribute
@@ -61,7 +66,7 @@ uv venv --python 3.12
 Finally, you can add all required and optional dependencies to it:
 
 ```bash
-uv pip install -r pyproject.toml -e . --extra vis --extra docs
+uv pip install -r pyproject.toml -e . --all-extras
 ```
 
 #### mamba
@@ -80,18 +85,13 @@ Next, create a virtual environment:
 ```bash
 conda create -n pytileproj python=3.12 mamba
 source activate pytileproj
-```
-
-Install ``gdal` and `uv` with mamba:
-
-```bash
 mamba install -c conda-forge uv
 ```
 
 Finally, use `uv` to install all other dependencies and `pytileproj` itself, e.g.:
 
 ```bash
-uv pip install -r pyproject.toml --extra vis --extra docs
+uv pip install -r pyproject.toml -e . --all-extras
 uv pip install -e . --no-deps
 ```
 
