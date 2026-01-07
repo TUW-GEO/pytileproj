@@ -34,6 +34,7 @@ import json
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 import orjson
+import shapely
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 from pytileproj._const import JSON_INDENT
@@ -254,11 +255,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
                 break
 
         if rpts_sel is None:
-            err_msg = (
-                f"The given coordinate ({coord}) is "
-                "outside any tiling system boundaries."
-            )
-            raise GeomOutOfZoneError(err_msg)
+            raise GeomOutOfZoneError(shapely.Point((coord.x, coord.y)))
 
         return rpts_sel
 
