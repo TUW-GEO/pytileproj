@@ -61,6 +61,7 @@ from pytileproj._types import (
     AnyTile,
     Extent,
     RasterTileGenerator,
+    SamplingFloatOrMap,
     T_co,
     TileGenerator,
 )
@@ -1071,7 +1072,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
     @classmethod
     def from_sampling(
         cls: RPTST,
-        sampling: float | Mapping[int, float | int],
+        sampling: SamplingFloatOrMap,
         proj_def: PSD,
         tiling_defs: Mapping[int, RegularTilingDefinition],
         **kwargs: Any,  # noqa: ANN401

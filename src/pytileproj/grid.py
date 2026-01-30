@@ -79,7 +79,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     @staticmethod
     def _create_rpts_from_def(
         proj_def: ProjSystemDefinition,
-        sampling: float | Mapping[int, float | int],
+        sampling: SamplingFloatOrMap,
         tiling_defs: Mapping[int, RegularTilingDefinition],
     ) -> RPTS:
         """Create regular projected tiling system from grid definitions.
