@@ -1,3 +1,6 @@
+# Copyright (c) 2026, TU Wien
+# Licensed under the MIT License. See LICENSE file.
+
 from importlib.util import find_spec
 
 import pyproj
