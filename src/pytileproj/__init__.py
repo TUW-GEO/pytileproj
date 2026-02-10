@@ -3,7 +3,7 @@
 
 """pytileproj's init module defining outward facing objects."""
 
-from pytileproj._errors import TileOutOfZoneError
+from pytileproj._errors import GeomOutOfZoneError, TileOutOfZoneError
 from pytileproj.grid import RegularGrid
 from pytileproj.tile import RasterTile
 from pytileproj.tiling_system import (
@@ -19,6 +19,7 @@ from pytileproj.tiling_system import (
 __all__ = [
     "GeogCoord",
     "GeogGeom",
+    "GeomOutOfZoneError",
     "ProjCoord",
     "ProjGeom",
     "ProjSystemDefinition",
