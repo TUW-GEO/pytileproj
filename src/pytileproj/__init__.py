@@ -8,7 +8,9 @@ from pytileproj.tiling_system import (
     GeogGeom,
     ProjCoord,
     ProjGeom,
+    ProjSystemDefinition,
     RegularProjTilingSystem,
+    RegularTilingDefinition,
 )
 
 __all__ = [
@@ -16,8 +18,10 @@ __all__ = [
     "GeogGeom",
     "ProjCoord",
     "ProjGeom",
+    "ProjSystemDefinition",
     "RasterTile",
     "RegularGrid",
     "RegularProjTilingSystem",
+    "RegularTilingDefinition",
     "TileOutOfZoneError",
 ]
