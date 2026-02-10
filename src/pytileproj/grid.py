@@ -222,7 +222,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
             system_order=system_order,
         )
 
-    def get_system_from_lonlat(self, lon: float, lat: float) -> list[RPTS]:
+    def get_systems_from_lonlat(self, lon: float, lat: float) -> list[RPTS]:
         """Get regular, projected tiling system from geographic coordinates.
 
         Parameters
@@ -268,6 +268,35 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
             raise GeomOutOfZoneError(shapely.Point((coord.x, coord.y)))
 
         return rptss
+
+    def lonlat_to_xy(self, lon: float, lat: float) -> Mapping[str, ProjCoord]:
+        """Convert geographic to projected coordinates.
+
+        Parameters
+        ----------
+        lon: float
+            Longitude.
+        lat: float
+            Latitude.
+
+        Returns
+        -------
+        Mapping[str, ProjCoord]
+            X and Y coordinate for each tiling system corresponding
+            to the given geographic point. Tiling system names
+            serve as key.
+
+        Raises
+        ------
+        GeomOutOfZoneError
+            If the given point is outside the projection boundaries.
+
+        """
+        proj_coords = {}
+        for rpts in self.get_systems_from_lonlat(lon, lat):
+            proj_coords[rpts.name] = rpts.lonlat_to_xy(lon, lat)
+
+        return proj_coords
 
     def _fetch_mod_grid_def(
         self,
