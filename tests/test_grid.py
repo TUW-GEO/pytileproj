@@ -45,6 +45,25 @@ def rpts_defs():
 
 
 @pytest.fixture(scope="module")
+def euas_defs():
+    return {
+        "e7eu": ProjSystemDefinition(
+            name="e7eu",
+            crs=27704,
+            min_xy=(0, 0),
+            max_xy=(8_660_000, 6_020_000),
+            axis_orientation=("E", "S"),
+        ),
+        "e7as": ProjSystemDefinition(
+            name="e7as",
+            crs=27703,
+            min_xy=(0, -1_800_000),
+            axis_orientation=("E", "S"),
+        ),
+    }
+
+
+@pytest.fixture(scope="module")
 def e7eu_grid_t1():
     return RegularTiling(
         name="t1",
@@ -81,7 +100,9 @@ def e7grid(e7eu_grid_t1: RegularTiling, e7af_grid_t1: RegularTiling):
         crs=27701,
     )
 
-    return RegularGrid(**{rpts_eu.name: rpts_eu, rpts_af.name: rpts_af})
+    return RegularGrid(
+        system_order=None, **{rpts_eu.name: rpts_eu, rpts_af.name: rpts_af}
+    )
 
 
 def test_io_grid_def(e7grid: RegularGrid):
@@ -163,6 +184,73 @@ def test_tiling_defs_multi_io(
     len_tiling_defs = 2
     assert e7grid_from_def._tiling_defs is not None  # noqa: SLF001
     assert len(e7grid_from_def._tiling_defs) == len_tiling_defs  # noqa: SLF001
+
+
+def test_system_order_fail(
+    rpts_defs: dict[str, ProjSystemDefinition],
+    tiling_defs_multi: dict[int, RegularTilingDefinition],
+):
+    try:
+        _ = RegularGrid.from_sampling(
+            10, rpts_defs, tiling_defs_multi, system_order=["a"]
+        )
+        raise AssertionError
+    except ValueError:
+        assert True
+
+
+def test_system_order_one(
+    rpts_defs: dict[str, ProjSystemDefinition],
+    tiling_defs_multi: dict[int, RegularTilingDefinition],
+):
+    e7grid = RegularGrid.from_sampling(
+        10, rpts_defs, tiling_defs_multi, system_order=["e7eu"]
+    )
+    assert len(e7grid) == 1
+
+
+def test_system_tiles_different_order(
+    euas_defs: dict[str, ProjSystemDefinition],
+    tiling_defs_multi: dict[int, RegularTilingDefinition],
+):
+    euas_bbox = (49.5, 58, 50.5, 58.5)
+    e7grid = RegularGrid.from_sampling(
+        10, euas_defs, tiling_defs_multi, system_order=["e7as", "e7eu"]
+    )
+    tilenames = [
+        tile.name for tile in e7grid.get_tiles_in_geog_bbox(euas_bbox, tiling_id="t2")
+    ]
+    assert tilenames == [
+        "e7as_X018Y028T02",
+        "e7as_X019Y028T02",
+        "e7as_X018Y029T02",
+        "e7as_X019Y029T02",
+        "e7eu_X72Y30T02",
+        "e7eu_X73Y30T02",
+    ]
+
+    e7grid = RegularGrid.from_sampling(
+        10, euas_defs, tiling_defs_multi, system_order=["e7eu", "e7as"]
+    )
+    tilenames = [
+        tile.name for tile in e7grid.get_tiles_in_geog_bbox(euas_bbox, tiling_id="t2")
+    ]
+    assert tilenames == [
+        "e7eu_X72Y30T02",
+        "e7eu_X73Y30T02",
+        "e7as_X018Y028T02",
+        "e7as_X019Y028T02",
+        "e7as_X018Y029T02",
+        "e7as_X019Y029T02",
+    ]
+
+    e7grid = RegularGrid.from_sampling(
+        10, euas_defs, tiling_defs_multi, system_order=["e7eu"]
+    )
+    tilenames = [
+        tile.name for tile in e7grid.get_tiles_in_geog_bbox(euas_bbox, tiling_id="t2")
+    ]
+    assert tilenames == ["e7eu_X72Y30T02", "e7eu_X73Y30T02"]
 
 
 if __name__ == "__main__":

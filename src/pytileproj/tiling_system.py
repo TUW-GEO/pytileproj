@@ -1227,7 +1227,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         x_label = f"X{tile.x:0{n_digits_xy}}"
         y_label = f"Y{tile.y:0{n_digits_xy}}"
         z_label = f"T{tile.z:02}"
-        return x_label + y_label + z_label
+        return f"{self.name}_{x_label + y_label + z_label}"
 
     def _name_to_tile(self, tilename: str) -> RegularTile:
         """Create a regular tile object from a given tilename.
