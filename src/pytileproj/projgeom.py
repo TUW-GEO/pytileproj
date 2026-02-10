@@ -110,7 +110,7 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     @model_serializer
     def serialize(self) -> dict:
         """Serialise/encode class variables."""
-        return {"geom": self.geom.wkt, "crs": self.crs.to_proj4()}
+        return {"geom": self.geom.wkt, "crs": self.crs.to_wkt()}
 
 
 class GeogGeom(ProjGeom):
@@ -185,7 +185,11 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
         Cartopy CRS object.
 
     """
-    proj4_params = crs.to_dict()
+    # ignore loss of information during CRS to PROJ4 conversion
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        proj4_params = crs.to_dict()
+
     proj4_name = proj4_params.get("proj")
     central_longitude = proj4_params.get("lon_0", 0.0)
     central_latitude = proj4_params.get("lat_0", 0.0)

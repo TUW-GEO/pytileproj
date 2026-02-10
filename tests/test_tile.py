@@ -26,7 +26,7 @@ def ref_extent() -> tuple:
 @pytest.fixture(scope="session")
 def ref_boundary(ref_extent: tuple) -> GeogGeom:
     ll_x, ll_y, ur_x, ur_y = ref_extent
-    ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
+    ref_points = [(ll_x, ll_y), (ur_x, ll_y), (ur_x, ur_y), (ll_x, ur_y)]
     sh_geom = Polygon(ref_points)
 
     return GeogGeom(geom=sh_geom)
@@ -90,9 +90,9 @@ def test_vertices(
 ):
     vertices = (
         (ref_extent[0], ref_extent[1]),
-        (ref_extent[0], ref_extent[3]),
-        (ref_extent[2], ref_extent[3]),
         (ref_extent[2], ref_extent[1]),
+        (ref_extent[2], ref_extent[3]),
+        (ref_extent[0], ref_extent[3]),
     )
 
     assert_extent(ref_proj_tile.outer_boundary_corners, vertices)

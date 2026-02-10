@@ -526,7 +526,7 @@ class RasterTile(BaseModel, Generic[T_co]):
             map(float, self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr"))
         )
         ul_x, ul_y = tuple(map(float, self.rc2xy(0, 0, px_origin="ul")))
-        return ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
+        return ((ll_x, ll_y), (lr_x, lr_y), (ur_x, ur_y), (ul_x, ul_y))
 
     @property
     def coord_corners(
@@ -545,9 +545,9 @@ class RasterTile(BaseModel, Generic[T_co]):
         """
         return (
             (self.ll_x, self.ll_y),
-            (self.ul_x, self.ul_y),
-            (self.ur_x, self.ur_y),
             (self.lr_x, self.lr_y),
+            (self.ur_x, self.ur_y),
+            (self.ul_x, self.ul_y),
         )
 
     @property

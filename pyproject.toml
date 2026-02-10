@@ -82,6 +82,7 @@ possibly-missing-attribute = "ignore"
 
 [tool.pytest.ini_options]
 addopts = "--cov=pytileproj --cov-report term-missing -rsx --verbose --color=yes"
+markers = ["vis_installed"]
 
 [tool.coverage.run]
 relative_files = true

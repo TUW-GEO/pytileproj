@@ -1321,7 +1321,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             coord.x,
             coord.y,
             tiling_id,
-            geographic_crs=coord.crs.to_proj4(),  # ty: ignore[invalid-argument-type]
+            geographic_crs=coord.crs.to_wkt(),  # ty: ignore[invalid-argument-type]
         )
         tilename = self._tile_to_name(tile)
         return self._tile_to_raster_tile(tile, name=tilename)
