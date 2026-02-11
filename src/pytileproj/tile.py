@@ -1,37 +1,23 @@
-# Copyright (c) 2025, TU Wien
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# The views and conclusions contained in the software and documentation are
-# those of the authors and should not be interpreted as representing official
-# policies, either expressed or implied, of the FreeBSD Project.
+# Copyright (c) 2026, TU Wien
+# Licensed under the MIT License. See LICENSE file.
 
 """Tile module defining regular and irregular tiles."""
 
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Union, cast
+from __future__ import annotations
+
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Literal,
+    TypeAlias,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import shapely
@@ -57,14 +43,21 @@ if VIS_INSTALLED:
     from matplotlib.patches import Polygon as PolygonPatch
 
     if TYPE_CHECKING:
+        from collections.abc import Callable, Sequence
+
         from cartopy.mpl.geoaxes import GeoAxes
 
-
 __all__ = ["RasterTile"]
-Extent = tuple[int | float, int | float, int | float, int | float]
+
+Extent = tuple[float, float, float, float]
+GeoTransformTuple: TypeAlias = tuple[float, float, float, float, float, float]
+OriginStr: TypeAlias = Literal["ul", "ur", "ll", "lr", "c"]
+T_co = TypeVar("T_co", covariant=True)
+RT = TypeVar("RT", bound="RasterTile[Any]")
+RTT = type[RT]
 
 
-class IrregularTile(BaseModel):
+class IrregularTile(BaseModel, Generic[T_co]):
     """Defines an irregular tile (arbitrary extent) at a specific zoom/tiling level."""
 
     name: str
@@ -128,8 +121,8 @@ def _align_geom():  # noqa: ANN202
         """
 
         def wrapper(  # noqa: ANN202
-            self: "RasterTile",
-            arg: Union[ProjGeom, "RasterTile"],
+            self: RasterTile,
+            arg: ProjGeom | RasterTile,
             *args: Sequence[Any],
             **kwargs: dict[str, Any],
         ):
@@ -151,21 +144,14 @@ def _align_geom():  # noqa: ANN202
     return decorator
 
 
-class RasterTile(BaseModel):
+class RasterTile(BaseModel, Generic[T_co]):
     """Defines a raster tile geometry located in a certain projection."""
 
     crs: Any
     n_rows: NonNegativeInt
     n_cols: NonNegativeInt
-    geotrans: tuple[float, float, float, float, float, float] = (
-        0,
-        1,
-        0,
-        0,
-        0,
-        -1,
-    )
-    px_origin: str = "ul"
+    geotrans: GeoTransformTuple = (0, 1, 0, 0, 0, -1)
+    px_origin: OriginStr = "ul"
     name: str | None = None
 
     _boundary: ProjGeom = PrivateAttr()
@@ -179,13 +165,14 @@ class RasterTile(BaseModel):
 
     @classmethod
     def from_extent(
-        cls,
+        cls: RTT,
         extent: Extent,
         crs: Any,  # noqa: ANN401
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
-    ) -> "RasterTile":
+        **kwargs: Any,  # noqa: ANN401
+    ) -> RT:
         """Initialise raster tile from a given extent and projection information.
 
         Parameters
@@ -200,6 +187,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in Y.
         name: str | None, optional
             Name of the raster tile.
+        **kwargs: Any
+            Optional keyword arguments for child class.
 
         Returns
         -------
@@ -214,16 +203,24 @@ class RasterTile(BaseModel):
         ul_x, ul_y = ll_x, ll_y + n_rows * y_pixel_size
         geotrans = (ul_x, x_pixel_size, 0, ul_y, 0, -y_pixel_size)
 
-        return cls(n_rows=n_rows, n_cols=n_cols, crs=crs, geotrans=geotrans, name=name)
+        return cls(
+            n_rows=n_rows,
+            n_cols=n_cols,
+            crs=crs,
+            geotrans=geotrans,
+            name=name,
+            **kwargs,
+        )
 
     @classmethod
     def from_geometry(
-        cls,
+        cls: RTT,
         proj_geom: ProjGeom,
         x_pixel_size: float,
         y_pixel_size: float,
         name: str | None = None,
-    ) -> "RasterTile":
+        **kwargs: Any,  # noqa: ANN401
+    ) -> RT:
         """Create a raster tile object from an existing geometry object.
 
         Since a raster tile can represent rectangles only, non-rectangular
@@ -240,6 +237,8 @@ class RasterTile(BaseModel):
             Pixel size in units of the projection in Y.
         name: str | None, optional
             Name of the raster tile.
+        **kwargs: Any
+            Optional keyword arguments for child class.
 
         Returns
         -------
@@ -259,10 +258,11 @@ class RasterTile(BaseModel):
             x_pixel_size,
             y_pixel_size,
             name=name,
+            **kwargs,
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "RasterTile":
+    def from_json(cls: RTT, json_str: str) -> RT:
         """Create raster tile from JSON str.
 
         Parameters
@@ -501,7 +501,7 @@ class RasterTile(BaseModel):
             map(float, self.rc2xy(self.n_rows - 1, self.n_cols - 1, px_origin="lr"))
         )
         ul_x, ul_y = tuple(map(float, self.rc2xy(0, 0, px_origin="ul")))
-        return ((ll_x, ll_y), (ul_x, ul_y), (ur_x, ur_y), (lr_x, lr_y))
+        return ((ll_x, ll_y), (lr_x, lr_y), (ur_x, ur_y), (ul_x, ul_y))
 
     @property
     def coord_corners(
@@ -520,13 +520,13 @@ class RasterTile(BaseModel):
         """
         return (
             (self.ll_x, self.ll_y),
-            (self.ul_x, self.ul_y),
-            (self.ur_x, self.ur_y),
             (self.lr_x, self.lr_y),
+            (self.ur_x, self.ur_y),
+            (self.ul_x, self.ul_y),
         )
 
     @property
-    def x_coords(self) -> np.ndarray:
+    def x_coords(self) -> npt.NDArray[Any]:
         """Return all coordinates in X direction."""
         if self.is_axis_parallel:
             min_x, _ = self.rc2xy(0, 0)
@@ -536,7 +536,7 @@ class RasterTile(BaseModel):
         return np.array(self.rc2xy(0, cols)[0])
 
     @property
-    def y_coords(self) -> np.ndarray:
+    def y_coords(self) -> npt.NDArray[Any]:
         """Return all coordinates in Y direction."""
         if self.is_axis_parallel:
             _, min_y = self.rc2xy(self.n_rows, 0)
@@ -546,7 +546,9 @@ class RasterTile(BaseModel):
         return np.array(self.rc2xy(rows, 0)[1])
 
     @property
-    def xy_coords(self) -> tuple[np.ndarray | int | float, np.ndarray | int | float]:
+    def xy_coords(
+        self,
+    ) -> tuple[npt.NDArray[Any] | int | float, npt.NDArray[Any] | int | float]:
         """Return meshgrid of both X and Y coordinates."""
         if self.is_axis_parallel:
             x_coords, y_coords = np.meshgrid(
@@ -576,7 +578,7 @@ class RasterTile(BaseModel):
         return self._boundary.geom
 
     @_align_geom()
-    def intersects(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def intersects(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile instance and another geometry intersect.
 
         Parameters
@@ -593,7 +595,7 @@ class RasterTile(BaseModel):
         return bool(shapely.intersects(self._boundary.geom, other.geom))
 
     @_align_geom()
-    def touches(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def touches(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile instance and another geometry touch each other.
 
         Parameters
@@ -615,7 +617,7 @@ class RasterTile(BaseModel):
         )
 
     @_align_geom()
-    def within(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def within(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the raster tile is fully within another geometry.
 
         Parameters
@@ -632,7 +634,7 @@ class RasterTile(BaseModel):
         return bool(shapely.within(self._boundary.geom, other.geom))
 
     @_align_geom()
-    def overlaps(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def overlaps(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if a geometry overlaps with the raster tile.
 
         Parameters
@@ -648,13 +650,49 @@ class RasterTile(BaseModel):
         """
         return bool(shapely.overlaps(self._boundary.geom, other.geom))
 
+    @overload
     def xy2rc(
         self,
-        x: float | np.ndarray,
-        y: float | np.ndarray,
-        crs: Any = None,  # noqa: ANN401
-        px_origin: str | None = None,
-    ) -> tuple[int | np.ndarray, int | np.ndarray]:
+        x: float,
+        y: float,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
+    ) -> tuple[int, int]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: npt.NDArray[Any],
+        y: float,
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], int]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: float,
+        y: npt.NDArray[Any],
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
+    ) -> tuple[int, npt.NDArray[Any]]: ...
+
+    @overload
+    def xy2rc(
+        self,
+        x: npt.NDArray[Any],
+        y: npt.NDArray[Any],
+        crs: Any | None = None,  # noqa: ANN401
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+    def xy2rc(
+        self,
+        x: float | npt.NDArray[Any],
+        y: float | npt.NDArray[Any],
+        crs: Any | None = None,
+        px_origin: OriginStr | None = None,
+    ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
         """Convert world system to pixels coordinates.
 
         Calculate an index of a pixel in which a given point of a world system lies.
@@ -694,9 +732,44 @@ class RasterTile(BaseModel):
         c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
         return r, c
 
+    @overload
     def rc2xy(
-        self, r: int | np.ndarray, c: int | np.ndarray, px_origin: str | None = None
-    ) -> tuple[float | np.ndarray, float | np.ndarray]:
+        self,
+        r: int,
+        c: int,
+        px_origin: OriginStr | None = None,
+    ) -> tuple[float, float]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: npt.NDArray[Any],
+        c: int,
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], float]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: int,
+        c: npt.NDArray[Any],
+        px_origin: OriginStr | None = None,
+    ) -> tuple[float, npt.NDArray[Any]]: ...
+
+    @overload
+    def rc2xy(
+        self,
+        r: npt.NDArray[Any],
+        c: npt.NDArray[Any],
+        px_origin: OriginStr | None = None,
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+    def rc2xy(
+        self,
+        r: int | npt.NDArray[Any],
+        c: int | npt.NDArray[Any],
+        px_origin: OriginStr | None = None,
+    ) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
         """Convert pixels to world system coordinates.
 
         Returns the coordinates of the center or a corner (depending on
@@ -731,7 +804,7 @@ class RasterTile(BaseModel):
     def plot(  # noqa: PLR0913
         self,
         *,
-        ax: Union["GeoAxes", None] = None,
+        ax: GeoAxes | None = None,
         facecolor: str = "tab:red",
         edgecolor: str = "black",
         edgewidth: float = 1,
@@ -742,7 +815,7 @@ class RasterTile(BaseModel):
         add_country_borders: bool = True,
         extent: Extent | None = None,
         extent_proj: Any = None,  # noqa: ANN401
-    ) -> Union["GeoAxes", None]:
+    ) -> GeoAxes | None:
         """Plot the boundary of the raster tile on a map.
 
         Parameters
@@ -859,7 +932,7 @@ class RasterTile(BaseModel):
         return ProjGeom(geom=boundary, crs=self.crs)
 
     @_align_geom()
-    def __contains__(self, other: Union[ProjGeom, "RasterTile"]) -> bool:
+    def __contains__(self, other: ProjGeom | RasterTile) -> bool:
         """Evaluate if the given geometry is fully within the raster tile.
 
         Parameters
@@ -882,7 +955,7 @@ class RasterTile(BaseModel):
         )
         return hash((this_corners, self.n_rows, self.n_cols))
 
-    def __eq__(self, other: "RasterTile") -> bool:  # ty: ignore[invalid-method-override]
+    def __eq__(self, other: RasterTile) -> bool:  # ty: ignore[invalid-method-override]
         """Check if this and another raster tile are equal.
 
         Equality holds true if the vertices, rows and columns are the same.

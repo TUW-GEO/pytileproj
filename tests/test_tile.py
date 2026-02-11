@@ -2,12 +2,11 @@ import copy
 import random
 
 import numpy as np
-import pyproj
 import pytest
 from shapely import Polygon
 
-from pytileproj._const import DECIMALS, VIS_INSTALLED
-from pytileproj.projgeom import ProjGeom, transform_geometry
+from pytileproj._const import DECIMALS, GEOG_EPSG, VIS_INSTALLED
+from pytileproj.projgeom import GeogGeom, ProjGeom, transform_geometry
 from pytileproj.tile import RasterTile
 
 if VIS_INSTALLED:
@@ -25,12 +24,12 @@ def ref_extent() -> tuple:
 
 
 @pytest.fixture(scope="session")
-def ref_boundary(ref_extent: tuple) -> ProjGeom:
+def ref_boundary(ref_extent: tuple) -> GeogGeom:
     ll_x, ll_y, ur_x, ur_y = ref_extent
-    ref_points = [(ll_x, ll_y), (ll_x, ur_y), (ur_x, ur_y), (ur_x, ll_y)]
+    ref_points = [(ll_x, ll_y), (ur_x, ll_y), (ur_x, ur_y), (ll_x, ur_y)]
     sh_geom = Polygon(ref_points)
 
-    return ProjGeom(geom=sh_geom, crs=pyproj.CRS.from_epsg(4326))
+    return GeogGeom(geom=sh_geom)
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +39,7 @@ def pixel_size() -> float:
 
 @pytest.fixture(scope="session")
 def epsg() -> int:
-    return 4326
+    return GEOG_EPSG
 
 
 @pytest.fixture(scope="session")
@@ -91,9 +90,9 @@ def test_vertices(
 ):
     vertices = (
         (ref_extent[0], ref_extent[1]),
-        (ref_extent[0], ref_extent[3]),
-        (ref_extent[2], ref_extent[3]),
         (ref_extent[2], ref_extent[1]),
+        (ref_extent[2], ref_extent[3]),
+        (ref_extent[0], ref_extent[3]),
     )
 
     assert_extent(ref_proj_tile.outer_boundary_corners, vertices)

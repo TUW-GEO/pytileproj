@@ -1,38 +1,15 @@
-# Copyright (c) 2025, TU Wien
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# The views and conclusions contained in the software and documentation are
-# those of the authors and should not be interpreted as representing official
-# policies, either expressed or implied, of the FreeBSD Project.
+# Copyright (c) 2026, TU Wien
+# Licensed under the MIT License. See LICENSE file.
 
 """Utility module for projected geometries."""
 
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple
+from typing import Annotated, Any, Literal, TypeAlias, cast, overload
 
 import numpy as np
+import numpy.typing as npt
 import orjson
 import pyproj
 import requests
@@ -45,8 +22,10 @@ from shapely.geometry import MultiPolygon, Polygon
 
 from pytileproj._const import (
     DECIMALS,
-    DEFAULT_SEG_NUM,
+    DEF_SEG_LEN_M,
     GEO_INSTALLED,
+    GEOG_CRS,
+    GEOG_EPSG,
     TIMEOUT,
     VIS_INSTALLED,
 )
@@ -71,13 +50,22 @@ __all__ = [
     "xy2ij",
 ]
 
+GeoTransformTuple: TypeAlias = tuple[float, float, float, float, float, float]
+OriginStr: TypeAlias = Literal["ul", "ur", "ll", "lr", "c"]
 
-class ProjCoord(NamedTuple):
+
+@dataclass(frozen=True)
+class ProjCoord:
     """Define a coordinate in a certain projection."""
 
     x: float
     y: float
     crs: pyproj.CRS
+
+
+@dataclass(frozen=True)
+class GeogCoord(ProjCoord):
+    crs: pyproj.CRS = GEOG_CRS
 
 
 def convert_geom(arg: str | shapely.Geometry) -> shapely.Geometry:
@@ -97,7 +85,11 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     @model_serializer
     def serialize(self) -> dict:
         """Serialise/encode class variables."""
-        return {"geom": self.geom.wkt, "crs": self.crs.to_proj4()}
+        return {"geom": self.geom.wkt, "crs": self.crs.to_wkt()}
+
+
+class GeogGeom(ProjGeom):
+    crs: pyproj.CRS = pyproj.CRS.from_epsg(GEOG_EPSG)
 
 
 def fetch_proj_zone(epsg: int) -> ProjGeom:
@@ -145,7 +137,7 @@ def fetch_proj_zone(epsg: int) -> ProjGeom:
                 else:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
-                zone_geom = ProjGeom(geom=zone_geom, crs=pyproj.CRS.from_epsg(4326))
+                zone_geom = GeogGeom(geom=zone_geom)
 
     if zone_geom is None:
         err_msg = f"No zone boundary found for EPSG {epsg}"
@@ -168,7 +160,11 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
         Cartopy CRS object.
 
     """
-    proj4_params = crs.to_dict()
+    # ignore loss of information during CRS to PROJ4 conversion
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        proj4_params = crs.to_dict()
+
     proj4_name = proj4_params.get("proj")
     central_longitude = proj4_params.get("lon_0", 0.0)
     central_latitude = proj4_params.get("lat_0", 0.0)
@@ -261,11 +257,11 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
 
 
 def transform_coords(
-    x: float | np.ndarray,
-    y: float | np.ndarray,
+    x: float | npt.NDArray[Any],
+    y: float | npt.NDArray[Any],
     this_crs: Any,  # noqa: ANN401
     other_crs: Any,  # noqa: ANN401
-) -> tuple[float | np.ndarray, float | np.ndarray]:
+) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
     """Transform coordinate tuple from a given to another projection.
 
     Parameters
@@ -293,9 +289,48 @@ def transform_coords(
     return traffo.transform(x, y)
 
 
+@overload
 def xy2ij(
-    x: float | np.ndarray, y: float | np.ndarray, geotrans: tuple, origin: str = "ul"
-) -> tuple[int | np.ndarray, int | np.ndarray]:
+    x: float,
+    y: float,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, int]: ...
+
+
+@overload
+def xy2ij(
+    x: npt.NDArray[Any],
+    y: float,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], int]: ...
+
+
+@overload
+def xy2ij(
+    x: float,
+    y: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, npt.NDArray[Any]]: ...
+
+
+@overload
+def xy2ij(
+    x: npt.NDArray[Any],
+    y: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+
+def xy2ij(
+    x: float | npt.NDArray[Any],
+    y: float | npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr = "ul",
+) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
     Parameters
@@ -374,9 +409,48 @@ def xy2ij(
     return i, j
 
 
+@overload
 def ij2xy(
-    i: int | np.ndarray, j: int | np.ndarray, geotrans: tuple, origin: str = "ul"
-) -> tuple[float | np.ndarray, float | np.ndarray]:
+    i: int,
+    j: int,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, int]: ...
+
+
+@overload
+def ij2xy(
+    i: npt.NDArray[Any],
+    j: int,
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], int]: ...
+
+
+@overload
+def ij2xy(
+    i: int,
+    j: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[int, npt.NDArray[Any]]: ...
+
+
+@overload
+def ij2xy(
+    i: npt.NDArray[Any],
+    j: npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr,
+) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
+
+
+def ij2xy(
+    i: int | npt.NDArray[Any],
+    j: int | npt.NDArray[Any],
+    geotrans: GeoTransformTuple,
+    origin: OriginStr = "ul",
+) -> tuple[float | npt.NDArray[Any], float | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
     Parameters
@@ -457,7 +531,7 @@ def rasterise_polygon(
     x_pixel_size: float,
     y_pixel_size: float,
     extent: tuple | None = None,
-) -> np.ndarray:
+) -> npt.NDArray[Any]:
     """Rasterises a Shapely polygon defined by a clockwise list of points.
 
     Parameters
@@ -531,13 +605,13 @@ def rasterise_polygon(
 
 
 def split_polygon_by_antimeridian(
-    geog_geom: ProjGeom, *, great_circle: bool = False
-) -> ProjGeom:
+    geog_geom: GeogGeom, *, great_circle: bool = False
+) -> GeogGeom:
     """Split a polygon or multi-polygon at the antimeridian.
 
     Parameters
     ----------
-    geog_geom : ProjGeom
+    geog_geom : GeogGeom
         Projected polygon or multi-polygon object in LonLat space to be
         split by the antimeridian.
     great_circle: bool, optional
@@ -551,8 +625,7 @@ def split_polygon_by_antimeridian(
         It contains only one polygon if no intersect with the antimeridian is given.
 
     """
-    geog_epsg = 4326
-    if geog_geom.crs.to_epsg() != geog_epsg:
+    if geog_geom.crs.to_epsg() != GEOG_EPSG:
         err_msg = "Geometry is not in the LonLat projection."
         raise ValueError(err_msg)
 
@@ -565,14 +638,14 @@ def split_polygon_by_antimeridian(
         err_msg = f"Geometry type {geom_type} not supported."
         raise ValueError(err_msg)
 
-    return ProjGeom(geom=geog_poly_am, crs=pyproj.CRS.from_epsg(geog_epsg))
+    return GeogGeom(geom=geog_poly_am)
 
 
 def transform_geometry(
     proj_geom: ProjGeom,
     crs: Any,  # noqa: ANN401
     segment: float | None = None,
-) -> ProjGeom:
+) -> ProjGeom | GeogGeom:
     """Transform a geometry to the given target spatial reference system.
 
     Parameters
@@ -597,24 +670,25 @@ def transform_geometry(
     takes the antimeridian into account.
 
     """
+    src_geom = proj_geom.geom
+
     # modify the geometry such it has no segment longer then the given distance
     if segment is not None:
-        src_geom = shapely.segmentize(proj_geom.geom, max_segment_length=segment)
-    else:
-        src_geom = proj_geom.geom
+        src_geom = shapely.segmentize(src_geom, max_segment_length=segment)
 
     transformer = pyproj.Transformer.from_crs(proj_geom.crs, crs, always_xy=True)
     dst_geom = shapely.transform(src_geom, transformer.transform, interleaved=False)
     dst_crs = pyproj.CRS.from_user_input(crs)
 
-    geog_epsg = 4236
-    if dst_crs.to_epsg() == geog_epsg:
-        dst_geom = split_polygon_by_antimeridian(dst_geom)
+    if dst_crs.to_epsg() == GEOG_EPSG:
+        dst_geom = split_polygon_by_antimeridian(GeogGeom(geom=dst_geom))
+    else:
+        dst_geom = ProjGeom(geom=dst_geom, crs=dst_crs)
 
-    return ProjGeom(geom=dst_geom, crs=dst_crs)
+    return dst_geom
 
 
-def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
+def transform_geom_to_geog(proj_geom: ProjGeom) -> GeogGeom:
     """Transform geometry to the LonLat system.
 
     Parameters
@@ -628,7 +702,9 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> ProjGeom:
         Geometry object in the LonLat system.
 
     """
-    return transform_geometry(proj_geom, 4326, segment=DEFAULT_SEG_NUM)
+    return cast(
+        "GeogGeom", transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
+    )
 
 
 def convert_any_to_geog_geom(
@@ -658,6 +734,9 @@ def convert_any_to_geog_geom(
             with arg.open() as f:
                 geom = shapely.from_geojson(f.read())
         elif arg.suffix == ".parquet":
+            if not GEO_INSTALLED:
+                err_msg = "It is required to install the 'geo' extension."
+                raise ImportError(err_msg)
             geom = gpd.read_parquet(arg)["geometry"][0]
         else:
             err_msg = (
@@ -665,11 +744,11 @@ def convert_any_to_geog_geom(
                 f"(only 'geojson' and 'parquet'): {arg.suffix}"
             )
             raise OSError(err_msg)
-        proj_geom = ProjGeom(geom=geom, crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = GeogGeom(geom=geom)
     elif isinstance(arg, shapely.Geometry):
-        proj_geom = ProjGeom(geom=arg, crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = GeogGeom(geom=arg)
     elif isinstance(arg, str):
-        proj_geom = ProjGeom(geom=swkt.loads(arg), crs=pyproj.CRS.from_epsg(4326))
+        proj_geom = GeogGeom(geom=swkt.loads(arg))
     elif isinstance(arg, dict):
         proj_geom = ProjGeom(**arg)
     elif isinstance(arg, ProjGeom):

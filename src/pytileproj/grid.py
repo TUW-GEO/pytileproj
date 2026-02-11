@@ -1,51 +1,41 @@
-# Copyright (c) 2025, TU Wien
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# The views and conclusions contained in the software and documentation are
-# those of the authors and should not be interpreted as representing official
-# policies, either expressed or implied, of the FreeBSD Project.
+# Copyright (c) 2026, TU Wien
+# Licensed under the MIT License. See LICENSE file.
 
 """Grid module defining regular and irregular grids."""
 
+from __future__ import annotations
+
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 import orjson
-from pydantic import BaseModel, PrivateAttr, TypeAdapter
+import shapely
+from pydantic import BaseModel, PrivateAttr, TypeAdapter, model_validator
 
 from pytileproj._const import JSON_INDENT
+from pytileproj._errors import GeomOutOfZoneError
+from pytileproj._types import RasterTileGenerator, SamplingFloatOrMap, T_co
+from pytileproj.projgeom import GeogCoord, ProjCoord
 from pytileproj.tiling import RegularTiling
 from pytileproj.tiling_system import (
+    PSD,
+    RPTS,
     ProjSystemDefinition,
     RegularProjTilingSystem,
     RegularTilingDefinition,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+RG = TypeVar("RG", bound="RegularGrid[Any]")
+SYSTEM_ORDER_NAME = "system_order"
+
 __all__ = ["RegularGrid"]
 
 
-class RegularGrid(BaseModel, extra="allow"):
+class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
     """Define a regular grid.
 
     A collection of regular, projected, multi-level tiling systems
@@ -53,21 +43,44 @@ class RegularGrid(BaseModel, extra="allow"):
 
     """
 
-    _proj_defs: dict[str, ProjSystemDefinition] = PrivateAttr()
-    _tiling_defs: dict[int, RegularTilingDefinition] = PrivateAttr()
+    system_order: list[str] | None = None
+
+    _proj_defs: Mapping[str, ProjSystemDefinition] = PrivateAttr()
+    _tiling_defs: Mapping[int, RegularTilingDefinition] = PrivateAttr()
 
     _rpts_cls = RegularProjTilingSystem
 
-    def __init__(self, **rpts: RegularProjTilingSystem) -> None:
-        """Initialise a regular grid object."""
-        super().__init__(**rpts)
+    def model_post_init(self, context: Any) -> None:  # noqa: ANN401
+        """Initialise remaining parts of the projection system object."""
+        super().model_post_init(context)
+        if self.system_order is None:
+            self.system_order = self._get_system_order()
+
+    def _get_system_order(self) -> list[str]:
+        """Return internal tiling system order."""
+        return sorted(set(dict(self).keys()) - {SYSTEM_ORDER_NAME})
+
+    @model_validator(mode="after")
+    def check_system_order(self) -> Self:
+        """Check if system orders correspond."""
+        internal_system_order = self._get_system_order()
+        system_order = self.system_order or []
+        for ts_name in system_order:
+            if ts_name not in internal_system_order:
+                err_msg = (
+                    f"The tiling system '{ts_name}' specified "
+                    "in the tiling system order is not available."
+                )
+                raise ValueError(err_msg)
+
+        return self
 
     @staticmethod
     def _create_rpts_from_def(
         proj_def: ProjSystemDefinition,
-        sampling: float | dict[int, float | int],
-        tiling_defs: dict[int, RegularTilingDefinition],
-    ) -> RegularProjTilingSystem:
+        sampling: SamplingFloatOrMap,
+        tiling_defs: Mapping[int, RegularTilingDefinition],
+    ) -> RPTS:
         """Create regular projected tiling system from grid definitions.
 
         Create a regular, projected tiling system instance from given tiling system
@@ -90,7 +103,7 @@ class RegularGrid(BaseModel, extra="allow"):
             Regular, projected tiling system instance.
 
         """
-        return RegularProjTilingSystem.from_sampling(
+        return RegularProjTilingSystem.from_sampling(  # type: ignore[reportReturnType]
             sampling,
             proj_def,
             tiling_defs,
@@ -116,10 +129,11 @@ class RegularGrid(BaseModel, extra="allow"):
     @classmethod
     def from_sampling(
         cls,
-        sampling: float | dict[int | str, float | int],
-        proj_defs: dict[str, ProjSystemDefinition],
-        tiling_defs: dict[int, RegularTilingDefinition],
-    ) -> "RegularGrid":
+        sampling: SamplingFloatOrMap,
+        proj_defs: Mapping[str, ProjSystemDefinition],
+        tiling_defs: Mapping[int, RegularTilingDefinition],
+        system_order: list[str] | None = None,
+    ) -> Self:
         """Create a regular grid from grid definitions.
 
         Create a regular grid instance from given tiling system definitions
@@ -130,11 +144,13 @@ class RegularGrid(BaseModel, extra="allow"):
         sampling: float | int | Dict[int | str, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary with
             tiling IDs as keys and samplings as values.
-        proj_defs: dict[str, ProjSystemDefinition]
+        proj_defs: Mapping[str, ProjSystemDefinition]
             Projection system definitions (stores name, CRS, extent,
             and axis orientation).
-        tiling_defs: Dict[int, RegularTilingDefinition]
+        tiling_defs: Mapping[int, RegularTilingDefinition]
             Tiling definition (stores name/tiling level and tile size).
+        system_order: list[str] | None, optional
+            Defines the usage and order of the tiling systems.
 
         Returns
         -------
@@ -144,13 +160,16 @@ class RegularGrid(BaseModel, extra="allow"):
         """
         tiling_systems = {}
         for name, rpts_def in proj_defs.items():
+            if (system_order is not None) and (name not in system_order):
+                continue
+
             tiling_systems[name] = cls._create_rpts_from_def(
                 rpts_def,
                 sampling,
                 tiling_defs,
             )
 
-        rgrid = cls(**tiling_systems)
+        rgrid = cls(system_order=system_order, **tiling_systems)
         rgrid._proj_defs = proj_defs
         rgrid._tiling_defs = tiling_defs
 
@@ -158,8 +177,11 @@ class RegularGrid(BaseModel, extra="allow"):
 
     @classmethod
     def from_grid_def(
-        cls, json_path: Path, sampling: float | dict[int | str, float | int]
-    ) -> "RegularGrid":
+        cls,
+        json_path: Path,
+        sampling: SamplingFloatOrMap,
+        system_order: list[str] | None = None,
+    ) -> Self:
         """Create a regular grid from a grid definition file.
 
         Create a regular grid instance from given tiling system definitions stored
@@ -172,6 +194,8 @@ class RegularGrid(BaseModel, extra="allow"):
         sampling: float | int | Dict[int | str, float | int]
             Grid sampling/pixel size specified as a single value or a dictionary with
             tiling IDs as keys and samplings as values.
+        system_order: list[str] | None, optional
+            Defines the usage and order of the tiling systems.
 
         Returns
         -------
@@ -195,11 +219,90 @@ class RegularGrid(BaseModel, extra="allow"):
             sampling=sampling,
             proj_defs=rpts_defs,
             tiling_defs=tiling_defs,
+            system_order=system_order,
         )
+
+    def get_systems_from_lonlat(self, lon: float, lat: float) -> list[RPTS]:
+        """Get regular, projected tiling system from geographic coordinates.
+
+        Parameters
+        ----------
+        lon: float
+            Longitude.
+        lat: float
+            Latitude.
+
+        Returns
+        -------
+        list[RegularProjTilingSystem]
+            The regular, projected tiling system which intersects with
+            the given coordinate.
+
+        """
+        coord = GeogCoord(x=lon, y=lat)
+        return self.get_systems_from_coord(coord)
+
+    def get_systems_from_coord(self, coord: ProjCoord) -> list[RPTS]:
+        """Get regular, projected tiling system from projected coordinates.
+
+        Parameters
+        ----------
+        coord: ProjCoord
+            Projected coordinates.
+
+        Returns
+        -------
+        list[RegularProjTilingSystem]
+            The regular, projected tiling systems which intersect with
+            the given coordinate.
+
+        """
+        rptss = []
+        system_order = self.system_order or []
+        for ts_name in system_order:
+            if coord in self[ts_name]:
+                rpts = self[ts_name]
+                rptss.append(rpts)
+
+        if len(rptss) == 0:
+            raise GeomOutOfZoneError(shapely.Point((coord.x, coord.y)))
+
+        return rptss
+
+    def lonlat_to_xy(self, lon: float, lat: float) -> Mapping[str, ProjCoord]:
+        """Convert geographic to projected coordinates.
+
+        Parameters
+        ----------
+        lon: float
+            Longitude.
+        lat: float
+            Latitude.
+
+        Returns
+        -------
+        Mapping[str, ProjCoord]
+            X and Y coordinate for each tiling system corresponding
+            to the given geographic point. Tiling system names
+            serve as key.
+
+        Raises
+        ------
+        GeomOutOfZoneError
+            If the given point is outside the projection boundaries.
+
+        """
+        proj_coords = {}
+        for rpts in self.get_systems_from_lonlat(lon, lat):
+            proj_coords[rpts.name] = rpts.lonlat_to_xy(lon, lat)
+
+        return proj_coords
 
     def _fetch_mod_grid_def(
         self,
-    ) -> tuple[dict[str, ProjSystemDefinition], dict[int, RegularTilingDefinition]]:
+    ) -> tuple[
+        Mapping[str, ProjSystemDefinition[T_co]], Mapping[int, RegularTilingDefinition]
+    ]:
         """Create regular grid system definitions.
 
         Create required regular tiling system definitions from the tiling systems
@@ -222,8 +325,8 @@ class RegularGrid(BaseModel, extra="allow"):
         proj_defs = {}
         tiling_defs = {}
         ref_tiling_level = None
-        rtps_names = list(self.model_dump().keys())
-        for name in rtps_names:
+        system_order = self.system_order or []
+        for name in system_order:
             rpts = self[name]
             if ref_tiling_level is None:
                 ref_tiling_level = rpts.tiling_levels[0]
@@ -262,9 +365,9 @@ class RegularGrid(BaseModel, extra="allow"):
     @staticmethod
     def _validate_json(
         grid_def: str,
-        rgrid_cls: "RegularGrid",
+        rgrid_cls: RegularGrid,
         rpts_cls: RegularProjTilingSystem,
-    ) -> "RegularGrid":
+    ) -> RG:
         """Create a regular grid object from the JSON class representation.
 
         Parameters
@@ -285,6 +388,8 @@ class RegularGrid(BaseModel, extra="allow"):
         rgrid = TypeAdapter(rgrid_cls).validate_json(grid_def)
         rpts_names = list(rgrid.model_dump().keys())
         for rpts_name in rpts_names:
+            if rpts_name == SYSTEM_ORDER_NAME:
+                continue
             setattr(
                 rgrid,
                 rpts_name,
@@ -294,7 +399,7 @@ class RegularGrid(BaseModel, extra="allow"):
         return rgrid
 
     @classmethod
-    def from_file(cls, json_path: Path) -> "RegularGrid":
+    def from_file(cls, json_path: Path) -> Self:
         """Create a regular grid instance from a file.
 
         Create a regular grid instance from its JSON representation stored
@@ -314,7 +419,33 @@ class RegularGrid(BaseModel, extra="allow"):
         with json_path.open() as f:
             pp_def = f.read()
 
-        return cls._validate_json(pp_def, cls, cls._rpts_cls.default)
+        return cls._validate_json(pp_def, cls, cls._rpts_cls.default)  # type: ignore[reportArgumentType]
+
+    def get_tiles_in_geog_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        tiling_id: int | str = 0,
+    ) -> RasterTileGenerator:
+        """Get all tiles intersecting with the geographic bounding box.
+
+        Parameters
+        ----------
+        bbox: tuple[float, float, float, float]
+            Bounding box (x_min, y_min, x_max, y_max) for selecting tiles.
+        tiling_id: int | str
+            Tiling level or name.
+            Defaults to the first tiling level.
+
+        Returns
+        -------
+        RasterTileGenerator
+            Yields raster tile after tile, which intersects with the given
+            bounding box.
+
+        """
+        system_order = self.system_order or []
+        for ts_name in system_order:
+            yield from self[ts_name].get_tiles_in_geog_bbox(bbox, tiling_id=tiling_id)
 
     def to_file(self, json_path: Path) -> None:
         """Write the JSON representation of the regular grid instance to a file.
@@ -329,13 +460,14 @@ class RegularGrid(BaseModel, extra="allow"):
         with json_path.open("w") as f:
             f.writelines(pp_def)
 
-    def __getitem__(self, name: str) -> RegularProjTilingSystem:
+    def __getitem__(self, arg: str | ProjCoord) -> RPTS | list[RPTS]:
         """Return a regular, projected tiling system instance.
 
         Parameters
         ----------
-        name: str
-            Name/identifier of the projected tiling system instance.
+        arg: str | ProjCoord
+            Name/identifier of the projected tiling system instance or
+            a projected coordinate.
 
         Returns
         -------
@@ -343,13 +475,25 @@ class RegularGrid(BaseModel, extra="allow"):
             Regular, projected tiling system instance.
 
         """
-        return getattr(self, name)
+        if isinstance(arg, str):
+            rpts = getattr(self, arg)
+        elif isinstance(arg, ProjCoord):
+            rpts = self.get_systems_from_coord(arg)
+        else:
+            err_msg = f"Item type '{type(arg)}' is not supported."
+            raise TypeError(err_msg)
+
+        return rpts
+
+    def __len__(self) -> int:
+        """Get number of tiling systems."""
+        return len(self._get_system_order())
 
 
 def write_grid_def(
     json_path: Path,
-    proj_defs: dict[str, ProjSystemDefinition],
-    tiling_defs: dict[int, RegularTilingDefinition],
+    proj_defs: Mapping[str, PSD],
+    tiling_defs: Mapping[int, RegularTilingDefinition],
 ) -> None:
     """Write grid definitions to a JSON file.
 
@@ -357,10 +501,10 @@ def write_grid_def(
     ----------
     json_path: Path
             Path to JSON file.
-    proj_defs: dict[str, ProjSystemDefinition]
+    proj_defs: Mapping[str, ProjSystemDefinition]
             Projection system definitions (stores name, CRS, extent,
             and axis orientation).
-    tiling_defs: Dict[int, RegularTilingDefinition]
+    tiling_defs: Mapping[int, RegularTilingDefinition]
         Tiling definition (stores name/tiling level and tile size).
 
     """

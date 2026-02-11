@@ -3,7 +3,7 @@ name: pytileproj GitHub Pages deploy
 on:
   push:
     # Runs on pushes targeting the default branch
-    branches: [morecantile-integration]
+    branches: [master]
 env:
   # `BASE_URL` determines, relative to the root of the domain, the URL that your site is served from.
   # E.g., if your site lives at `https://mydomain.org/myproject`, set `BASE_URL=/myproject`.
@@ -40,7 +40,7 @@ jobs:
       - name: Install the project
         run: |
             uv venv --python 3.12
-            uv pip install -r pyproject.toml -e . --extra vis --extra docs --extra geo
+            uv pip install -r pyproject.toml -e . --all-extras
             uv pip list
 
       - name: Create docs
@@ -56,7 +56,7 @@ jobs:
           echo "[" > "$OUT"
           echo "{\"name\": \"latest\", \"url\": \"/$REPO/latest/\"}," >> "$OUT"
 
-          TAGS=$(git tag --sort=version:refname)
+          TAGS=$(git tag -l "*v1*" --sort=version:refname)
           echo $TAGS
           for TAG in $TAGS; do
             cp -R docs/_build/latest docs/_build/$TAG

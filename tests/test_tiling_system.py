@@ -148,7 +148,7 @@ def test_reg_pgs_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
 def test_reg_pgs_raster_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
     tile = Tile(x=37, y=23, z=1)
     raster_tile = e7eu_rpsb.get_tile_from_index(*tile)
-    assert raster_tile.name == "X37Y23T01"
+    assert raster_tile.name == "e7eu_X37Y23T01"
     assert raster_tile.shape == (10000, 10000)
     assert raster_tile.geotrans == (
         e7eu_rpsb[0].origin_xy[0] + 10000 * 10 * tile.x,

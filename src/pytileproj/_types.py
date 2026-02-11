@@ -1,13 +1,20 @@
-from collections.abc import Generator
+# Copyright (c) 2026, TU Wien
+# Licensed under the MIT License. See LICENSE file.
 
-from morecantile.models import Tile as RegularTile
+from collections.abc import Generator, Mapping
+from typing import Any, TypeAlias, TypeVar
+
+from morecantile.commons import Tile as RegularTile
 
 from pytileproj.tile import IrregularTile, RasterTile
 
-Extent = tuple[int | float, int | float, int | float, int | float]
-PartialExtent = tuple[int | float, int | float, int | float | None, int | float | None]
-AnyTile = RegularTile | IrregularTile
-TileGenerator = Generator[AnyTile, AnyTile, AnyTile]
-RegTileGenerator = Generator[RegularTile, RegularTile, RegularTile]
-IrregTileGenerator = Generator[IrregularTile, IrregularTile, IrregularTile]
-RasterTileGenerator = Generator[RasterTile, RasterTile, RasterTile]
+T_co = TypeVar("T_co", covariant=True)
+RT = TypeVar("RT", bound="RasterTile[Any]")
+Extent: TypeAlias = tuple[float, float, float, float]
+PartialExtent: TypeAlias = tuple[float, float, float | None, float | None]
+AnyTile: TypeAlias = RegularTile | IrregularTile
+TileGenerator: TypeAlias = Generator[AnyTile, None, None]
+RegTileGenerator: TypeAlias = Generator[RegularTile, None, None]
+IrregTileGenerator: TypeAlias = Generator[IrregularTile, None, None]
+RasterTileGenerator: TypeAlias = Generator[RasterTile[T_co], None, None]
+SamplingFloatOrMap: TypeAlias = float | Mapping[int | str, float]

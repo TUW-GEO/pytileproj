@@ -1,40 +1,39 @@
 import math
 
 import numpy as np
-import pyproj
 import pytest
 import shapely
 
 from pytileproj.projgeom import (
-    ProjGeom,
+    GeogGeom,
     rasterise_polygon,
     split_polygon_by_antimeridian,
 )
 
 
 @pytest.fixture
-def poly_siberia_alaska() -> ProjGeom:
+def poly_siberia_alaska() -> GeogGeom:
     points = [
         (177.6545884597184, 67.05574774066811),
         (179.0195867605756, 65.33232820668778),
         (198.4723636216472, 66.06909015550372),
         (198.7828129097253, 68.14247939909886),
     ]
-    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(4326))
+    return GeogGeom(geom=shapely.Polygon(points))
 
 
 @pytest.fixture
-def poly_spitzbergen() -> ProjGeom:
+def poly_spitzbergen() -> GeogGeom:
     points = [
         (8.391827331539572, 77.35762113396143),
-        (16.87007957357446, 81.59290885863483),
-        (40.50119498304080, 79.73786853853339),
         (25.43098663332705, 75.61353436967198),
+        (40.50119498304080, 79.73786853853339),
+        (16.87007957357446, 81.59290885863483),
     ]
-    return ProjGeom(geom=shapely.Polygon(points), crs=pyproj.CRS.from_epsg(4326))
+    return GeogGeom(geom=shapely.Polygon(points))
 
 
-def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska: ProjGeom):
+def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska: GeogGeom):
     result = split_polygon_by_antimeridian(poly_siberia_alaska, great_circle=False)
 
     assert math.isclose(
@@ -44,7 +43,7 @@ def test_split_polygon_by_am_siberia_alaska(poly_siberia_alaska: ProjGeom):
     )
 
 
-def test_split_polygon_by_am_spitzbergen(poly_spitzbergen: ProjGeom):
+def test_split_polygon_by_am_spitzbergen(poly_spitzbergen: GeogGeom):
     result = split_polygon_by_antimeridian(poly_spitzbergen)
 
     assert math.isclose(
