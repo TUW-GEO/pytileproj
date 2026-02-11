@@ -49,6 +49,7 @@ from pytileproj.projgeom import (
     fetch_proj_zone,
     pyproj_to_cartopy_crs,
     rasterise_polygon,
+    split_polygon_by_antimeridian,
     transform_coords,
     transform_geom_to_geog,
     transform_geometry,
@@ -1492,8 +1493,9 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         """
         if proj_geom.crs.to_epsg() == GEOG_EPSG:
-            geog_geom = fix_polygon(proj_geom.geom)
-            geog_geom = GeogGeom(geom=geog_geom)
+            geog_geom = split_polygon_by_antimeridian(
+                cast("GeogGeom", proj_geom), great_circle=True
+            )
         else:
             geog_geom = transform_geom_to_geog(proj_geom)
 
