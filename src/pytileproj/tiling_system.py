@@ -1444,7 +1444,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             [(west, south), (east, south), (east, north), (west, north)]
         )
         if east < west:  # bbox crosses antimeridian
-            bbox_poly = fix_polygon(bbox_poly)
+            bbox_poly = fix_polygon(bbox_poly, great_circle=False)
 
         yield from self._get_tiles_in_geog_geom(
             GeogGeom(geom=bbox_poly), cast("int", tiling_id)
