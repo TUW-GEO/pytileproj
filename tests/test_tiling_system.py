@@ -53,25 +53,46 @@ def e7eu_grid_invalid():
 
 
 @pytest.fixture(scope="module")
-def e7eu_psb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
+def e7eu_psb(
+    e7eu_grid_t1: RegularTiling,
+    e7eu_grid_t3: RegularTiling,
+    *,
+    epsg_api_accessible: bool,
+):
     return ProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
         crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
 
 
 @pytest.fixture(scope="module")
-def e7eu_rpsb(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
+def e7eu_rpsb(
+    e7eu_grid_t1: RegularTiling,
+    e7eu_grid_t3: RegularTiling,
+    *,
+    epsg_api_accessible: bool,
+):
     return RegularProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
         crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
 
 
-def test_projsystembase():
-    e7eu = ProjSystem(crs=27704)
+def test_projsystembase(*, epsg_api_accessible: bool):
+    e7eu = ProjSystem(
+        crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
+    )
 
     lon, lat = 16.37, 48.19
     e7_coord = e7eu.lonlat_to_xy(lon, lat)
@@ -126,13 +147,22 @@ def test_reg_pgs_invalid(
     e7eu_grid_t1: RegularTiling,
     e7eu_grid_t3: RegularTiling,
     e7eu_grid_invalid: RegularTiling,
+    *,
+    epsg_api_accessible: bool,
 ):
     grids = {
         grid.tiling_level: grid
         for grid in [e7eu_grid_t1, e7eu_grid_t3, e7eu_grid_invalid]
     }
     try:
-        _ = RegularProjTilingSystem(name="e7eu", tilings=grids, crs=27704)
+        _ = RegularProjTilingSystem(
+            name="e7eu",
+            tilings=grids,
+            crs=27704,
+            proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+            if not epsg_api_accessible
+            else None,
+        )
         raise AssertionError
     except ValueError:
         assert True
@@ -160,11 +190,19 @@ def test_reg_pgs_raster_tile_conv(e7eu_rpsb: RegularProjTilingSystem):
     )
 
 
-def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
+def test_congruency(
+    e7eu_grid_t1: RegularTiling,
+    e7eu_grid_t3: RegularTiling,
+    *,
+    epsg_api_accessible: bool,
+):
     rpts = RegularProjTilingSystem(
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [e7eu_grid_t1, e7eu_grid_t3]},
         crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
 
     assert rpts.is_congruent
@@ -181,6 +219,9 @@ def test_congruency(e7eu_grid_t1: RegularTiling, e7eu_grid_t3: RegularTiling):
         name="e7eu",
         tilings={grid.tiling_level: grid for grid in [new_grid, e7eu_grid_t3]},
         crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
 
     assert not rpts.is_congruent
@@ -191,8 +232,13 @@ def test_plot(e7eu_rpsb: RegularProjTilingSystem):
     e7eu_rpsb.plot()
 
 
-def test_proj_zone_geog_io():
-    e7eu_ref = ProjSystem(crs=27704)
+def test_proj_zone_geog_io(*, epsg_api_accessible: bool):
+    e7eu_ref = ProjSystem(
+        crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
+    )
     json_path = Path("test_proj_zone_geog.geojson")
     e7eu_ref.export_proj_zone_geog(json_path)
 

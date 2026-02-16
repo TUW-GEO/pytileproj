@@ -138,6 +138,14 @@ def fetch_proj_zone(epsg: int) -> ProjGeom:
                     err_msg = f"Geometry type '{geom_type}' not supported."
                     raise ValueError(err_msg)
                 zone_geom = GeogGeom(geom=zone_geom)
+            else:
+                err_msg = (
+                    "Connection to EPSG's extent polygon API is currently not possible."
+                )
+                raise ConnectionError(err_msg)
+    else:
+        err_msg = "Connection to EPSG API is currently not possible."
+        raise ConnectionError(err_msg)
 
     if zone_geom is None:
         err_msg = f"No zone boundary found for EPSG {epsg}"
@@ -708,23 +716,23 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> GeogGeom:
 
 
 def convert_any_to_geog_geom(
-    arg: Path | shapely.Geometry | ProjGeom | str | dict | None,
-) -> ProjGeom | None:
+    arg: Path | shapely.Geometry | GeogGeom | str | dict | None,
+) -> GeogGeom | None:
     """Convert an arbitrary input to a projected geometry in the LonLat system.
 
     Parameters
     ----------
-    arg: Path | shapely.Polygon | ProjGeom | None
+    arg: Path | shapely.Polygon | GeogGeom | None
         Input representing a geometry object. It can be one of:
             - a path to a GeoJSON file
             - a shapely.Geometry
-            - a ProjGeom
+            - a GeogGeom
             - str
             - None
 
     Returns
     -------
-    ProjGeom | None
+    GeogGeom | None
         Input converted to an projected polygon or multi-polygon.
         If the input is None, then None will be returned.
 
@@ -744,16 +752,16 @@ def convert_any_to_geog_geom(
                 f"(only 'geojson' and 'parquet'): {arg.suffix}"
             )
             raise OSError(err_msg)
-        proj_geom = GeogGeom(geom=geom)
+        geog_geom = GeogGeom(geom=geom)
     elif isinstance(arg, shapely.Geometry):
-        proj_geom = GeogGeom(geom=arg)
+        geog_geom = GeogGeom(geom=arg)
     elif isinstance(arg, str):
-        proj_geom = GeogGeom(geom=swkt.loads(arg))
+        geog_geom = GeogGeom(geom=swkt.loads(arg))
     elif isinstance(arg, dict):
-        proj_geom = ProjGeom(**arg)
-    elif isinstance(arg, ProjGeom):
-        proj_geom = arg
+        geog_geom = GeogGeom(geom=arg["geom"])
+    elif isinstance(arg, GeogGeom):
+        geog_geom = arg
     else:
-        proj_geom = None
+        geog_geom = None
 
-    return proj_geom
+    return geog_geom

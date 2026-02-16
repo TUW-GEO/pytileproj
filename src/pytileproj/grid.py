@@ -342,6 +342,7 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
                 min_xy=rpts[ref_tiling_level].extent[:2],
                 max_xy=rpts[ref_tiling_level].extent[2:],
                 axis_orientation=rpts[ref_tiling_level].axis_orientation,
+                proj_zone_geog=rpts.proj_zone_geog,
             )
 
         return proj_defs, tiling_defs

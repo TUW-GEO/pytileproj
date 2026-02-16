@@ -25,7 +25,7 @@ def tiling_defs_multi():
 
 
 @pytest.fixture(scope="module")
-def rpts_defs():
+def rpts_defs(*, epsg_api_accessible: bool):
     return {
         "e7eu": ProjSystemDefinition(
             name="e7eu",
@@ -33,6 +33,9 @@ def rpts_defs():
             min_xy=(0, 0),
             max_xy=(8_660_000, 6_020_000),
             axis_orientation=("E", "S"),
+            proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+            if not epsg_api_accessible
+            else None,
         ),
         "e7af": ProjSystemDefinition(
             name="e7af",
@@ -40,12 +43,15 @@ def rpts_defs():
             min_xy=(0, 0),
             max_xy=(12_000_000, 9_600_000),
             axis_orientation=("E", "S"),
+            proj_zone_geog=Path(__file__).parent / "data" / "af_zone.parquet"
+            if not epsg_api_accessible
+            else None,
         ),
     }
 
 
 @pytest.fixture(scope="module")
-def euas_defs():
+def euas_defs(*, epsg_api_accessible: bool):
     return {
         "e7eu": ProjSystemDefinition(
             name="e7eu",
@@ -53,12 +59,18 @@ def euas_defs():
             min_xy=(0, 0),
             max_xy=(8_660_000, 6_020_000),
             axis_orientation=("E", "S"),
+            proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+            if not epsg_api_accessible
+            else None,
         ),
         "e7as": ProjSystemDefinition(
             name="e7as",
             crs=27703,
             min_xy=(0, -1_800_000),
             axis_orientation=("E", "S"),
+            proj_zone_geog=Path(__file__).parent / "data" / "as_zone.parquet"
+            if not epsg_api_accessible
+            else None,
         ),
     }
 
@@ -88,16 +100,27 @@ def e7af_grid_t1():
 
 
 @pytest.fixture(scope="module")
-def e7grid(e7eu_grid_t1: RegularTiling, e7af_grid_t1: RegularTiling):
+def e7grid(
+    e7eu_grid_t1: RegularTiling,
+    e7af_grid_t1: RegularTiling,
+    *,
+    epsg_api_accessible: bool,
+):
     rpts_eu = RegularProjTilingSystem(
         name="e7eu",
         tilings={e7eu_grid_t1.tiling_level: e7eu_grid_t1},
         crs=27704,
+        proj_zone_geog=Path(__file__).parent / "data" / "eu_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
     rpts_af = RegularProjTilingSystem(
         name="e7af",
         tilings={e7af_grid_t1.tiling_level: e7af_grid_t1},
         crs=27701,
+        proj_zone_geog=Path(__file__).parent / "data" / "af_zone.parquet"
+        if not epsg_api_accessible
+        else None,
     )
 
     return RegularGrid(

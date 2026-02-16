@@ -138,7 +138,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
                 raise ValueError(err_msg)
             self.proj_zone_geog = self._proj_zone_geog
         else:
-            self._proj_zone_geog = cast("ProjGeom", self.proj_zone_geog)
+            self._proj_zone_geog = cast("GeogGeom", self.proj_zone_geog)
 
         proj_zone_faulty = transform_geometry(self._proj_zone_geog, self.crs)
         # buffer of 0 removes wrap-arounds along the anti-meridian
