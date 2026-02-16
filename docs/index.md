@@ -9,6 +9,7 @@ readme
 :hidden:
 :caption: 📚 Guides
 
+guides/geometry.ipynb
 guides/tile.ipynb
 guides/tiling_system.ipynb
 guides/grid.ipynb
