@@ -5,8 +5,8 @@ from importlib.util import find_spec
 
 import pyproj
 
-DEF_SEG_LEN_DEG = 0.1  # number of segments for a lon lat geometry
-DEF_SEG_LEN_M = 100  # number of segments for a projected geometry
+DEF_SEG_LEN_DEG = 0.1  # maximum length of a segment for a lon lat geometry
+DEF_SEG_LEN_M = 10_000  # maximum length of a segment for a projected geometry
 DEF_SEG_NUM = 5_000  # number of segments for a projected geometry
 DECIMALS = 9  # least significant digit after the command for rounding
 TIMEOUT = 60  # timeout for requests
