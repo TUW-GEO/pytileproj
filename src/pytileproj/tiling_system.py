@@ -173,7 +173,7 @@ class ProjSystem(BaseModel, arbitrary_types_allowed=True):
     @property
     def unit(self) -> str:
         """Return projection unit."""
-        return self._crs.prime_meridian.unit_name
+        return self._crs.coordinate_system.to_cf()[0]["units"]
 
     def lonlat_to_xy(self, lon: float, lat: float) -> ProjCoord:
         """Convert geographic to a projected coordinates.
