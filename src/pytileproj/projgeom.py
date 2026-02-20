@@ -215,7 +215,7 @@ def pyproj_to_cartopy_crs(crs: pyproj.CRS) -> "ccrs.CRS":
             false_northing,
             standard_parallels,
         ),
-        "gnom": ccrs.Gnomonic(central_longitude, central_latitude),
+        "gnom": ccrs.Gnomonic(central_latitude, central_longitude),
         "laea": ccrs.LambertAzimuthalEqualArea(
             central_longitude, central_latitude, false_easting, false_northing
         ),
