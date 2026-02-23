@@ -1,6 +1,6 @@
 # pytileproj
 
-[![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/ubuntu/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/ubuntu.yml) [![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/windows/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/windows.yml) [![codecov](https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master)](https://coveralls.io/github/TUW-GEO/pytileproj?branch=master) [![pypi](https://badge.fury.io/py/pytileproj.svg)](https://badge.fury.io/py/pytileproj) [![docs](https://img.shields.io/badge/pytileproj-documentation-blue)](https://tuw-geo.github.io/pytileproj)
+[![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/ci/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/ci.yml) [![codecov](https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master)](https://coveralls.io/github/TUW-GEO/pytileproj?branch=master) [![pypi](https://badge.fury.io/py/pytileproj.svg)](https://badge.fury.io/py/pytileproj) [![docs](https://img.shields.io/badge/pytileproj-documentation-blue)](https://tuw-geo.github.io/pytileproj)
 
 
 A python package for working with projected tiling systems.
