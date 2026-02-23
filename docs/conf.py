@@ -20,6 +20,9 @@ extensions = [
     "autodoc2",
     "sphinx.ext.napoleon",
 ]
+myst_enable_extensions = [
+    "colon_fence",
+]
 myst_heading_anchors = 3
 autodoc2_packages = [
     "../src/pytileproj",  # path to your package
@@ -69,4 +72,6 @@ html_theme_options = {
         "version_match": "latest",
     },
     "navbar_end": ["version-switcher"],
+    "repository_url": "https://github.com/TUW-GEO/pytileproj",
+    "use_repository_button": True,
 }

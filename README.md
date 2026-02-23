@@ -1,6 +1,6 @@
 # pytileproj
 
-[![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/ci/badge.svg)](https://github.com/TUW-GEO/pytileproj/actions/workflows/ci.yml) [![codecov](https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master)](https://coveralls.io/github/TUW-GEO/pytileproj?branch=master) [![pypi](https://badge.fury.io/py/pytileproj.svg)](https://badge.fury.io/py/pytileproj) [![docs](https://img.shields.io/badge/pytileproj-documentation-blue)](https://tuw-geo.github.io/pytileproj)
+[![Build Status](https://github.com/TUW-GEO/pytileproj/workflows/ci.yml/badge.svg?branch=master)](https://github.com/TUW-GEO/pytileproj/actions/workflows/ci.yml) [![codecov](https://coveralls.io/repos/github/TUW-GEO/pytileproj/badge.svg?branch=master)](https://coveralls.io/github/TUW-GEO/pytileproj?branch=master) [![pypi](https://badge.fury.io/py/pytileproj.svg)](https://badge.fury.io/py/pytileproj) [![docs](https://img.shields.io/badge/pytileproj-documentation-blue)](https://tuw-geo.github.io/pytileproj)
 
 
 A python package for working with projected tiling systems.
@@ -11,7 +11,7 @@ Projected tiling systems define a tiling scheme for multiple levels (tiling or z
 - *tiling:* A tiling is put on top of the projection to subdivide space into smaller units a.k.a. tiles. Tilings can be either regular or irregular:
   - *irregular:* Tiles can have arbitrary shapes and the overall tiling does not need to cover a certain extent. The only restriction is that tiles are not allowed to intersect.
   - *regular:* Tiles need to have the same shape and the regular tiling needs to fill a certain extent (no holes). The regular tiling follows the [OGC standard](https://docs.ogc.org/is/17-083r4/17-083r4.html).
-- *tiling_system:* Multiple tilings covering the same extent are grouped into a tiling system.
+- *tiling_system:* Multiple tilings representing a hierarchy and covering the same extent are grouped into a tiling system.
 - *grid:* Multiple tiling systems with the same tiling scheme but different projections are grouped into a grid. This allows to represent grid systems like the [Equi7Grid](https://github.com/TUW-GEO/Equi7Grid).
 
 ## How does `geospade` fit into the geospatial stack?
@@ -116,8 +116,8 @@ If you want to contribute please follow these steps:
 If you use the software in a publication then please cite it using the Zenodo DOI.
 Be aware that this badge links to the latest package version.
 
-Please select your specific version at https://doi.org/10.5281/zenodo.1042555 to get the DOI of that version.
+Please select your specific version [here](https://doi.org/10.5281/zenodo.1042555) to get the DOI of that version.
 You should normally always use the DOI for the specific version of your record in citations.
 This is to ensure that other researchers can access the exact research artefact you used for reproducibility.
 
-You can find additional information regarding DOI versioning at http://help.zenodo.org/#versioning
+You can find additional information regarding DOI versioning [here](http://help.zenodo.org/#versioning).
