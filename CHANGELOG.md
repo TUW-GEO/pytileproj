@@ -2,7 +2,12 @@
 
 ## Version 1.0.0
 
--
+- complete rebuild of the project
+- using `morecantile` for regular tilings and to achive OGC compliance
+- separation of tilings and projections
+- new tile and tiling system interface
+- extending functionality with tiling system order support
+- removed GDAL and OSGEO libraries as dependencies
 
 ## Version 0.1.0
 
