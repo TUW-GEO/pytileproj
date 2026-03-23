@@ -298,38 +298,24 @@ def transform_coords(
 
 
 @overload
-def xy2ij(
-    x: float,
-    y: float,
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
-) -> tuple[int, int]: ...
+def xy2ij(x: float, y: float, geotrans: GeoTransformTuple) -> tuple[int, int]: ...
 
 
 @overload
 def xy2ij(
-    x: npt.NDArray[Any],
-    y: float,
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: npt.NDArray[Any], y: float, geotrans: GeoTransformTuple
 ) -> tuple[npt.NDArray[Any], int]: ...
 
 
 @overload
 def xy2ij(
-    x: float,
-    y: npt.NDArray[Any],
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: float, y: npt.NDArray[Any], geotrans: GeoTransformTuple
 ) -> tuple[int, npt.NDArray[Any]]: ...
 
 
 @overload
 def xy2ij(
-    x: npt.NDArray[Any],
-    y: npt.NDArray[Any],
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: npt.NDArray[Any], y: npt.NDArray[Any], geotrans: GeoTransformTuple
 ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
 
@@ -337,7 +323,6 @@ def xy2ij(
     x: float | npt.NDArray[Any],
     y: float | npt.NDArray[Any],
     geotrans: GeoTransformTuple,
-    origin: OriginStr = "ul",
 ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
@@ -349,13 +334,6 @@ def xy2ij(
         World system coordinate(s) in Y direction.
     geotrans : 6-tuple
         GDAL geo-transformation parameters/dictionary.
-    origin : str, optional
-        Defines the world system origin of the pixel. It can be:
-        - upper left ("ul", default)
-        - upper right ("ur")
-        - lower right ("lr")
-        - lower left ("ll")
-        - center ("c")
 
     Returns
     -------
@@ -365,27 +343,6 @@ def xy2ij(
         Row number(s) in pixels.
 
     """
-    px_shift_map = {
-        "ul": (0, 0),
-        "ur": (1, 0),
-        "lr": (1, 1),
-        "ll": (0, 1),
-        "c": (0.5, 0.5),
-    }
-
-    px_shift = px_shift_map.get(origin)
-    if px_shift is None:
-        wrng_msg = (
-            "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead"
-        )
-        wrng_msg = wrng_msg.format(origin)
-        warnings.warn(wrng_msg, stacklevel=1)
-        px_shift = (0, 0)
-
-    # shift world system coordinates to the desired pixel origin
-    x -= px_shift[0] * geotrans[1]
-    y -= px_shift[1] * geotrans[5]
-
     # solved equation system describing an affine model: https://gdal.org/user/raster_data_model.html
     i = np.around(
         (

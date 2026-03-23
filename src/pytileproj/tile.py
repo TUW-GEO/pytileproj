@@ -656,7 +656,6 @@ class RasterTile(BaseModel, Generic[T_co]):
         x: float,
         y: float,
         crs: Any | None = None,  # noqa: ANN401
-        px_origin: OriginStr | None = None,
     ) -> tuple[int, int]: ...
 
     @overload
@@ -665,7 +664,6 @@ class RasterTile(BaseModel, Generic[T_co]):
         x: npt.NDArray[Any],
         y: float,
         crs: Any | None = None,  # noqa: ANN401
-        px_origin: OriginStr | None = None,
     ) -> tuple[npt.NDArray[Any], int]: ...
 
     @overload
@@ -674,7 +672,6 @@ class RasterTile(BaseModel, Generic[T_co]):
         x: float,
         y: npt.NDArray[Any],
         crs: Any | None = None,  # noqa: ANN401
-        px_origin: OriginStr | None = None,
     ) -> tuple[int, npt.NDArray[Any]]: ...
 
     @overload
@@ -683,7 +680,6 @@ class RasterTile(BaseModel, Generic[T_co]):
         x: npt.NDArray[Any],
         y: npt.NDArray[Any],
         crs: Any | None = None,  # noqa: ANN401
-        px_origin: OriginStr | None = None,
     ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
     def xy2rc(
@@ -691,7 +687,6 @@ class RasterTile(BaseModel, Generic[T_co]):
         x: float | npt.NDArray[Any],
         y: float | npt.NDArray[Any],
         crs: Any | None = None,
-        px_origin: OriginStr | None = None,
     ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
         """Convert world system to pixels coordinates.
 
@@ -728,8 +723,7 @@ class RasterTile(BaseModel, Generic[T_co]):
         """
         if crs is not None:
             x, y = transform_coords(x, y, crs, self.crs)
-        px_origin = self.px_origin if px_origin is None else px_origin
-        c, r = xy2ij(x, y, self.geotrans, origin=px_origin)
+        c, r = xy2ij(x, y, self.geotrans)
         return r, c
 
     @overload
