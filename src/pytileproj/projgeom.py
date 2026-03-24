@@ -62,10 +62,38 @@ class ProjCoord:
     y: float
     crs: pyproj.CRS
 
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.x}, {self.y})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"X: \n{self.x} \n"
+            f"Y: \n{self.y} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
+
 
 @dataclass(frozen=True)
 class GeogCoord(ProjCoord):
     crs: pyproj.CRS = GEOG_CRS
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.x}, {self.y})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"X: \n{self.x} \n"
+            f"Y: \n{self.y} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
 
 
 def convert_geom(arg: str | shapely.Geometry) -> shapely.Geometry:
@@ -86,6 +114,19 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     def serialize(self) -> dict:
         """Serialise/encode class variables."""
         return {"geom": self.geom.wkt, "crs": self.crs.to_wkt()}
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.geom})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"Geometry: \n{self.geom} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
 
 
 class GeogGeom(ProjGeom):

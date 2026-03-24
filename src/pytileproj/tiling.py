@@ -172,7 +172,7 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
 
     def __repr__(self) -> str:
         """Short string representation."""
-        return f"{self.__class__.__name__}({self.name})"
+        return f"{self.__class__.__name__}({self.name}, {self.sampling})"
 
     def __str__(self) -> str:
         """Extensive string representation."""
