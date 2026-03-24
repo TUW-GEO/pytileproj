@@ -995,9 +995,21 @@ class RasterTile(BaseModel, Generic[T_co]):
         """
         return not self == other
 
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.name})"
+
     def __str__(self) -> str:
-        """Representation of a raster tile as a Well Known Text (WKT) string."""
-        return self.boundary_wkt
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"Name: \n{self.name} \n"
+            f"Shape: \n({self.n_rows}, {self.n_cols})\n"
+            f"Projection: \n{self.pyproj_crs.to_proj4()}\n"
+            f"Geotransformation parameters: \n{self.geotrans}\n"
+            f"Pixel origin: \n{self.px_origin}"
+        )
 
 
 if __name__ == "__main__":

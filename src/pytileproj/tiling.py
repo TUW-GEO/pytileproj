@@ -170,6 +170,23 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         """OGC representation of the tiling."""
         return self._tm.model_dump()
 
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.name})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars}\n"
+            f"Name: \n{self.name}\n"
+            f"Extent: \n{self.extent}\n"
+            f"Sampling: \n{self.sampling}\n"
+            f"Tile shape: \n{self.tile_shape}\n"
+            f"Tiling level: \n{self.tiling_level}\n"
+            f"Axis orientation: \n{self.axis_orientation}"
+        )
+
 
 def validate_adj_matrix(ar: npt.NDArray[Any] | None) -> npt.NDArray[Any] | None:
     """Test if input array representing an adjacency matrix is 2D.

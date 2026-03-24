@@ -1551,6 +1551,20 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         with json_path.open("w") as f:
             f.writelines(grid_def)
 
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.name})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars}\n"
+            f"Name: \n{self.name}\n"
+            f"Projection: \n{self.pyproj_crs.to_proj4()}\n"
+            f"Tilings: \n{self.tilings}"
+        )
+
 
 class IrregularProjTilingSystem(ProjTilingSystem):
     """Irregular projected, multi-level tiling system."""

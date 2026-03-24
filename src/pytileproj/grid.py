@@ -490,6 +490,14 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         """Get number of tiling systems."""
         return len(self._get_system_order())
 
+    def __repr__(self) -> str:
+        """Represent class as a string."""
+        n_chars = len(self.__class__.__name__)
+        systems = self._get_system_order()
+        systems_repr = [repr(self[system]) for system in systems]
+        systems_str = "\n".join(systems_repr)
+        return f"{self.__class__.__name__} \n{'-' * n_chars} \n{systems_str}"
+
 
 def write_grid_def(
     json_path: Path,
