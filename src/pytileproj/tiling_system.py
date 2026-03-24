@@ -1534,9 +1534,9 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             xrange = range(lr_tile.x, ul_tile.x - 1, -1)
 
         if axis_orientation[1] == "S":
-            yrange = range(lr_tile.y, ul_tile.y + 1)
+            yrange = range(ul_tile.y, lr_tile.y + 1)
         else:
-            yrange = range(ul_tile.y, lr_tile.y - 1, -1)
+            yrange = range(lr_tile.y, ul_tile.y - 1, -1)
 
         for i in xrange:
             for j in yrange:
