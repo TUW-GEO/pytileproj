@@ -1360,7 +1360,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         else:
             xrange = range(maxx, minx - 1, -1)
 
-        if axis_orientation[0] == "S":
+        if axis_orientation[1] == "S":
             yrange = range(miny, maxy + 1)
         else:
             yrange = range(maxy, miny - 1, -1)
@@ -1527,25 +1527,20 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         ul_tile = self._tms._tile(bbox.left + res, bbox.top - res, target_zoom)  # noqa: SLF001
         lr_tile = self._tms._tile(bbox.right - res, bbox.bottom + res, target_zoom)  # noqa: SLF001
 
-        minx = min(lr_tile.x, ul_tile.x)
-        maxx = max(lr_tile.x, ul_tile.x)
-        miny = min(lr_tile.y, ul_tile.y)
-        maxy = max(lr_tile.y, ul_tile.y)
-
         axis_orientation = self[tile.z].axis_orientation
         if axis_orientation[0] == "E":
-            xrange = range(minx, maxx + 1)
+            xrange = range(ul_tile.x, lr_tile.x + 1)
         else:
-            xrange = range(maxx, minx - 1, -1)
+            xrange = range(lr_tile.x, ul_tile.x - 1, -1)
 
-        if axis_orientation[0] == "S":
-            yrange = range(miny, maxy + 1)
+        if axis_orientation[1] == "S":
+            yrange = range(lr_tile.y, ul_tile.y + 1)
         else:
-            yrange = range(maxy, miny - 1, -1)
+            yrange = range(ul_tile.y, lr_tile.y - 1, -1)
 
         for i in xrange:
             for j in yrange:
-                reg_tile = RegularTile(i, j, tile.z)
+                reg_tile = RegularTile(i, j, target_zoom)
                 tilename = self._tile_to_name(reg_tile)
                 raster_tile = self._tile_to_raster_tile(reg_tile, name=tilename)
 
