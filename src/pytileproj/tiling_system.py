@@ -1503,6 +1503,54 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         yield from self._get_tiles_in_geog_geom(geog_geom, cast("int", tiling_id))
 
+    def _children(self, tile: RegularTile) -> RasterTileGenerator:
+        """Get the child tiles of the given tile.
+
+        Original code from https://github.com/mapbox/mercantile/blob/master/mercantile/__init__.py#L1710
+
+        Parameters
+        ----------
+        tile: RegularTile
+            Parent tile.
+
+        Yields
+        ------
+        RasterTile
+
+        """
+        target_zoom = tile.z + 1
+
+        # buffer value to apply on bbox
+        res = self._tms.matrix(tile.z).cellSize / 10.0
+
+        bbox = self._tms.xy_bounds(tile)
+        ul_tile = self._tms._tile(bbox.left + res, bbox.top - res, target_zoom)  # noqa: SLF001
+        lr_tile = self._tms._tile(bbox.right - res, bbox.bottom + res, target_zoom)  # noqa: SLF001
+
+        minx = min(lr_tile.x, ul_tile.x)
+        maxx = max(lr_tile.x, ul_tile.x)
+        miny = min(lr_tile.y, ul_tile.y)
+        maxy = max(lr_tile.y, ul_tile.y)
+
+        axis_orientation = self[tile.z].axis_orientation
+        if axis_orientation[0] == "E":
+            xrange = range(minx, maxx + 1)
+        else:
+            xrange = range(maxx, minx - 1, -1)
+
+        if axis_orientation[0] == "S":
+            yrange = range(miny, maxy + 1)
+        else:
+            yrange = range(maxy, miny - 1, -1)
+
+        for i in xrange:
+            for j in yrange:
+                reg_tile = RegularTile(i, j, tile.z)
+                tilename = self._tile_to_name(reg_tile)
+                raster_tile = self._tile_to_raster_tile(reg_tile, name=tilename)
+
+                yield raster_tile
+
     def get_children_from_name(self, tilename: str) -> RasterTileGenerator:
         """Get all child tiles (next higher zoom level).
 
@@ -1518,9 +1566,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         """
         tile = self._name_to_tile(tilename)
-        for child_tile in self._tms.children(tile):
-            child_tilename = self._tile_to_name(child_tile)
-            yield self._tile_to_raster_tile(child_tile, name=child_tilename)
+        yield from self._children(tile)
 
     def get_parent_from_name(self, tilename: str) -> RT:
         """Get parent tile (next lower zoom level).
