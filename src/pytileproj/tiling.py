@@ -63,8 +63,12 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=self.corner_of_origin.value,
-            pointOfOrigin=self.origin_xy,
+            # hard-coded at the moment due to a bug in morecantile
+            cornerOfOrigin=CornerOfOrigin.top_left.value,
+            pointOfOrigin=(
+                self.extent[0],
+                self.extent[3],
+            ),
             tileWidth=tile_width,
             tileHeight=tile_height,
             matrixWidth=matrix_width,

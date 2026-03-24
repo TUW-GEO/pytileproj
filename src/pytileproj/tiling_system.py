@@ -1354,17 +1354,19 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         miny = min(nw_tile.y, se_tile.y)
         maxy = max(nw_tile.y, se_tile.y)
 
-        matrix = self._tms.matrix(tiling_level)
-        for j in range(miny, maxy + 1):
-            cf = (
-                matrix.get_coalesce_factor(j)
-                if matrix.variableMatrixWidths is not None
-                else 1
-            )
-            for i in range(minx, maxx + 1):
-                if cf != 1 and i % cf:
-                    continue
+        axis_orientation = self[tiling_level].axis_orientation
+        if axis_orientation[0] == "E":
+            xrange = range(minx, maxx + 1)
+        else:
+            xrange = range(maxx, minx - 1, -1)
 
+        if axis_orientation[0] == "S":
+            yrange = range(miny, maxy + 1)
+        else:
+            yrange = range(maxy, miny - 1, -1)
+
+        for i in xrange:
+            for j in yrange:
                 tile = RegularTile(i, j, tiling_level)
                 tilename = self._tile_to_name(tile)
                 raster_tile = self._tile_to_raster_tile(tile, name=tilename)
