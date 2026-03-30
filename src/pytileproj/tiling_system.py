@@ -806,7 +806,8 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
     def to_geodataframe(
         self,
         tiling_ids: list[str | int] | None = None,
-        exclude: set[str] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
     ) -> GeoDataFrame:
         """Create a geodataframe from all tiles within the system.
 
@@ -815,9 +816,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         tiling_ids: list[str | int] | None, optional
             List of tiling levels or names.
             Defaults to all tiling levels.
-        exclude: set[str] | None, optional
+        attrs_exclude: set[str] | None, optional
             Exclude raster tile object attributes.
             Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
 
         Returns
         -------
@@ -830,9 +834,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             if tiling_ids is None
             else [self.tiling_id_to_level(tiling_id) for tiling_id in tiling_ids]
         )
-        exclude_attrs = {"crs"}
-        if exclude is not None:
-            exclude_attrs = exclude_attrs.union(exclude)
+        attrs_exclude_def = {"crs"}
+        if attrs_exclude is not None:
+            attrs_exclude = attrs_exclude_def.union(attrs_exclude)
 
         tiling_attrs = ["name", "tiling_level"]
         tiling_attrs_rnmd = ["tiling_name", "tiling_level"]
@@ -850,9 +854,14 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
                 rtile = self._tile_to_raster_tile(tile, tilename)
                 if not self._tile_in_zone(rtile):
                     continue
-                rtile_dict = rtile.model_dump(exclude=exclude_attrs)
+                rtile_dict = rtile.model_dump(exclude=attrs_exclude)
                 rtile_dict.update(tiling_dict)
-                rtile_dict["geometry"] = rtile.boundary_shapely
+                tile_boundary = rtile.boundary_shapely
+                if max_segment_length is not None:
+                    tile_boundary = shapely.segmentize(
+                        tile_boundary, max_segment_length=max_segment_length
+                    )
+                rtile_dict["geometry"] = tile_boundary
                 rtiles.append(rtile_dict)
 
         return GeoDataFrame(rtiles, crs=self.pyproj_crs)
@@ -861,20 +870,24 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         self,
         shp_path: Path,
         tiling_ids: list[str | int] | None = None,
-        exclude: set[str] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
     ) -> None:
-        """Write class attributes to a JSON file.
+        """Write tiles per tiling ID to a SHP file.
 
         Parameters
         ----------
         shp_path: Path
-            Path to JSON file.
+            Path to SHP file.
         tiling_ids: list[str | int] | None, optional
             List of tiling levels or names.
             Defaults to all tiling levels.
-        exclude: set[str] | None, optional
+        attrs_exclude: set[str] | None, optional
             Exclude raster tile object attributes.
             Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
 
         """
         tiling_levels = (
@@ -885,7 +898,11 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         for tiling_level in tiling_levels:
             layer_name = self[tiling_level].name
             shp_layer_path = shp_path.parent / f"{shp_path.stem}_{layer_name}.shp"
-            self.to_geodataframe([tiling_level], exclude).to_file(shp_layer_path)
+            self.to_geodataframe(
+                [tiling_level],
+                attrs_exclude=attrs_exclude,
+                max_segment_length=max_segment_length,
+            ).to_file(shp_layer_path)
 
 
 def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
@@ -1354,17 +1371,19 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         miny = min(nw_tile.y, se_tile.y)
         maxy = max(nw_tile.y, se_tile.y)
 
-        matrix = self._tms.matrix(tiling_level)
-        for j in range(miny, maxy + 1):
-            cf = (
-                matrix.get_coalesce_factor(j)
-                if matrix.variableMatrixWidths is not None
-                else 1
-            )
-            for i in range(minx, maxx + 1):
-                if cf != 1 and i % cf:
-                    continue
+        axis_orientation = self[tiling_level].axis_orientation
+        if axis_orientation[0] == "E":
+            xrange = range(minx, maxx + 1)
+        else:
+            xrange = range(maxx, minx - 1, -1)
 
+        if axis_orientation[1] == "S":
+            yrange = range(miny, maxy + 1)
+        else:
+            yrange = range(maxy, miny - 1, -1)
+
+        for i in xrange:
+            for j in yrange:
                 tile = RegularTile(i, j, tiling_level)
                 tilename = self._tile_to_name(tile)
                 raster_tile = self._tile_to_raster_tile(tile, name=tilename)
@@ -1403,7 +1422,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             tilenames = []
             for geom in geog_geoms:
                 proj_geom = transform_geometry(
-                    geom, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
+                    geom, self.pyproj_crs, max_segment_length=DEF_SEG_LEN_DEG
                 )
                 for raster_tile in self._tiles(
                     proj_geom.geom.bounds,
@@ -1501,6 +1520,49 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         yield from self._get_tiles_in_geog_geom(geog_geom, cast("int", tiling_id))
 
+    def _children(self, tile: RegularTile) -> RasterTileGenerator:
+        """Get the child tiles of the given tile.
+
+        Original code from https://github.com/mapbox/mercantile/blob/master/mercantile/__init__.py#L1710
+
+        Parameters
+        ----------
+        tile: RegularTile
+            Parent tile.
+
+        Yields
+        ------
+        RasterTile
+
+        """
+        target_zoom = tile.z + 1
+
+        # buffer value to apply on bbox
+        res = self._tms.matrix(tile.z).cellSize / 10.0
+
+        bbox = self._tms.xy_bounds(tile)
+        ul_tile = self._tms._tile(bbox.left + res, bbox.top - res, target_zoom)  # noqa: SLF001
+        lr_tile = self._tms._tile(bbox.right - res, bbox.bottom + res, target_zoom)  # noqa: SLF001
+
+        axis_orientation = self[tile.z].axis_orientation
+        if axis_orientation[0] == "E":
+            xrange = range(ul_tile.x, lr_tile.x + 1)
+        else:
+            xrange = range(lr_tile.x, ul_tile.x - 1, -1)
+
+        if axis_orientation[1] == "S":
+            yrange = range(ul_tile.y, lr_tile.y + 1)
+        else:
+            yrange = range(lr_tile.y, ul_tile.y - 1, -1)
+
+        for i in xrange:
+            for j in yrange:
+                reg_tile = RegularTile(i, j, target_zoom)
+                tilename = self._tile_to_name(reg_tile)
+                raster_tile = self._tile_to_raster_tile(reg_tile, name=tilename)
+
+                yield raster_tile
+
     def get_children_from_name(self, tilename: str) -> RasterTileGenerator:
         """Get all child tiles (next higher zoom level).
 
@@ -1516,9 +1578,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
 
         """
         tile = self._name_to_tile(tilename)
-        for child_tile in self._tms.children(tile):
-            child_tilename = self._tile_to_name(child_tile)
-            yield self._tile_to_raster_tile(child_tile, name=child_tilename)
+        yield from self._children(tile)
 
     def get_parent_from_name(self, tilename: str) -> RT:
         """Get parent tile (next lower zoom level).
@@ -1548,6 +1608,20 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
         grid_def = json.dumps(self.to_ogc_standard(), indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(grid_def)
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.name})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars}\n"
+            f"Name: \n{self.name}\n"
+            f"Projection: \n{self.pyproj_crs.to_proj4()}\n"
+            f"Tilings: \n{self.tilings}"
+        )
 
 
 class IrregularProjTilingSystem(ProjTilingSystem):

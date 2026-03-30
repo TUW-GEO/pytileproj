@@ -63,8 +63,12 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
         self._tm = TileMatrix(
             scaleDenominator=self.sampling / 0.28e-3,  # per OGC definition
             cellSize=self.sampling,
-            cornerOfOrigin=self.corner_of_origin.value,
-            pointOfOrigin=self.origin_xy,
+            # hard-coded at the moment due to a bug in morecantile
+            cornerOfOrigin=CornerOfOrigin.top_left.value,
+            pointOfOrigin=(
+                self.extent[0],
+                self.extent[3],
+            ),
             tileWidth=tile_width,
             tileHeight=tile_height,
             matrixWidth=matrix_width,
@@ -165,6 +169,23 @@ class RegularTiling(BaseModel, arbitrary_types_allowed=True):
     def to_ogc_standard(self) -> dict:
         """OGC representation of the tiling."""
         return self._tm.model_dump()
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.name}, {self.sampling})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars}\n"
+            f"Name: \n{self.name}\n"
+            f"Extent: \n{self.extent}\n"
+            f"Sampling: \n{self.sampling}\n"
+            f"Tile shape: \n{self.tile_shape}\n"
+            f"Tiling level: \n{self.tiling_level}\n"
+            f"Axis orientation: \n{self.axis_orientation}"
+        )
 
 
 def validate_adj_matrix(ar: npt.NDArray[Any] | None) -> npt.NDArray[Any] | None:

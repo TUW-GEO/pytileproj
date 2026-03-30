@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 1.1.0
+
+- added segment size to tile export
+- added axis-orientation-ordered tile sorting
+- modified __repr__ and __str__ representation
+- removed pixel origin for world to pixel system coordinate transformations
+
 ## Version 1.0.0
 
 - complete rebuild of the project

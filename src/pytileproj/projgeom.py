@@ -62,10 +62,38 @@ class ProjCoord:
     y: float
     crs: pyproj.CRS
 
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.x}, {self.y})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"X: \n{self.x} \n"
+            f"Y: \n{self.y} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
+
 
 @dataclass(frozen=True)
 class GeogCoord(ProjCoord):
     crs: pyproj.CRS = GEOG_CRS
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.x}, {self.y})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"X: \n{self.x} \n"
+            f"Y: \n{self.y} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
 
 
 def convert_geom(arg: str | shapely.Geometry) -> shapely.Geometry:
@@ -86,6 +114,19 @@ class ProjGeom(BaseModel, arbitrary_types_allowed=True):
     def serialize(self) -> dict:
         """Serialise/encode class variables."""
         return {"geom": self.geom.wkt, "crs": self.crs.to_wkt()}
+
+    def __repr__(self) -> str:
+        """Short string representation."""
+        return f"{self.__class__.__name__}({self.geom})"
+
+    def __str__(self) -> str:
+        """Extensive string representation."""
+        n_chars = len(self.__class__.__name__)
+        return (
+            f"{self.__class__.__name__} \n{'-' * n_chars} \n"
+            f"Geometry: \n{self.geom} \n"
+            f"Projection: \n{self.crs.to_proj4()}"
+        )
 
 
 class GeogGeom(ProjGeom):
@@ -298,38 +339,24 @@ def transform_coords(
 
 
 @overload
-def xy2ij(
-    x: float,
-    y: float,
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
-) -> tuple[int, int]: ...
+def xy2ij(x: float, y: float, geotrans: GeoTransformTuple) -> tuple[int, int]: ...
 
 
 @overload
 def xy2ij(
-    x: npt.NDArray[Any],
-    y: float,
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: npt.NDArray[Any], y: float, geotrans: GeoTransformTuple
 ) -> tuple[npt.NDArray[Any], int]: ...
 
 
 @overload
 def xy2ij(
-    x: float,
-    y: npt.NDArray[Any],
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: float, y: npt.NDArray[Any], geotrans: GeoTransformTuple
 ) -> tuple[int, npt.NDArray[Any]]: ...
 
 
 @overload
 def xy2ij(
-    x: npt.NDArray[Any],
-    y: npt.NDArray[Any],
-    geotrans: GeoTransformTuple,
-    origin: OriginStr,
+    x: npt.NDArray[Any], y: npt.NDArray[Any], geotrans: GeoTransformTuple
 ) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]: ...
 
 
@@ -337,7 +364,6 @@ def xy2ij(
     x: float | npt.NDArray[Any],
     y: float | npt.NDArray[Any],
     geotrans: GeoTransformTuple,
-    origin: OriginStr = "ul",
 ) -> tuple[int | npt.NDArray[Any], int | npt.NDArray[Any]]:
     """Transform global/world system coordinates to pixel coordinates/indexes.
 
@@ -349,13 +375,6 @@ def xy2ij(
         World system coordinate(s) in Y direction.
     geotrans : 6-tuple
         GDAL geo-transformation parameters/dictionary.
-    origin : str, optional
-        Defines the world system origin of the pixel. It can be:
-        - upper left ("ul", default)
-        - upper right ("ur")
-        - lower right ("lr")
-        - lower left ("ll")
-        - center ("c")
 
     Returns
     -------
@@ -365,27 +384,6 @@ def xy2ij(
         Row number(s) in pixels.
 
     """
-    px_shift_map = {
-        "ul": (0, 0),
-        "ur": (1, 0),
-        "lr": (1, 1),
-        "ll": (0, 1),
-        "c": (0.5, 0.5),
-    }
-
-    px_shift = px_shift_map.get(origin)
-    if px_shift is None:
-        wrng_msg = (
-            "Pixel origin '{}' unknown. Upper left origin 'ul' will be taken instead"
-        )
-        wrng_msg = wrng_msg.format(origin)
-        warnings.warn(wrng_msg, stacklevel=1)
-        px_shift = (0, 0)
-
-    # shift world system coordinates to the desired pixel origin
-    x -= px_shift[0] * geotrans[1]
-    y -= px_shift[1] * geotrans[5]
-
     # solved equation system describing an affine model: https://gdal.org/user/raster_data_model.html
     i = np.around(
         (
@@ -652,7 +650,7 @@ def split_polygon_by_antimeridian(
 def transform_geometry(
     proj_geom: ProjGeom,
     crs: Any,  # noqa: ANN401
-    segment: float | None = None,
+    max_segment_length: float | None = None,
 ) -> ProjGeom | GeogGeom:
     """Transform a geometry to the given target spatial reference system.
 
@@ -663,7 +661,7 @@ def transform_geometry(
     crs : Any
         Target CRS of the geometry. A projection definition
         pyproj.CRS can handle.
-    segment : float, optional
+    max_segment_length : float, optional
         For precision: distance in units of the geometry projection
         defining longest segment of the geometry.
 
@@ -681,8 +679,8 @@ def transform_geometry(
     src_geom = proj_geom.geom
 
     # modify the geometry such it has no segment longer then the given distance
-    if segment is not None:
-        src_geom = shapely.segmentize(src_geom, max_segment_length=segment)
+    if max_segment_length is not None:
+        src_geom = shapely.segmentize(src_geom, max_segment_length=max_segment_length)
 
     transformer = pyproj.Transformer.from_crs(proj_geom.crs, crs, always_xy=True)
     dst_geom = shapely.transform(src_geom, transformer.transform, interleaved=False)
@@ -711,7 +709,8 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> GeogGeom:
 
     """
     return cast(
-        "GeogGeom", transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
+        "GeogGeom",
+        transform_geometry(proj_geom, GEOG_EPSG, max_segment_length=DEF_SEG_LEN_M),
     )
 
 
