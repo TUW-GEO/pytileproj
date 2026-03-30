@@ -806,7 +806,8 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
     def to_geodataframe(
         self,
         tiling_ids: list[str | int] | None = None,
-        exclude: set[str] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
     ) -> GeoDataFrame:
         """Create a geodataframe from all tiles within the system.
 
@@ -815,9 +816,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         tiling_ids: list[str | int] | None, optional
             List of tiling levels or names.
             Defaults to all tiling levels.
-        exclude: set[str] | None, optional
+        attrs_exclude: set[str] | None, optional
             Exclude raster tile object attributes.
             Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
 
         Returns
         -------
@@ -830,9 +834,9 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
             if tiling_ids is None
             else [self.tiling_id_to_level(tiling_id) for tiling_id in tiling_ids]
         )
-        exclude_attrs = {"crs"}
-        if exclude is not None:
-            exclude_attrs = exclude_attrs.union(exclude)
+        attrs_exclude_def = {"crs"}
+        if attrs_exclude is not None:
+            attrs_exclude = attrs_exclude_def.union(attrs_exclude)
 
         tiling_attrs = ["name", "tiling_level"]
         tiling_attrs_rnmd = ["tiling_name", "tiling_level"]
@@ -850,9 +854,11 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
                 rtile = self._tile_to_raster_tile(tile, tilename)
                 if not self._tile_in_zone(rtile):
                     continue
-                rtile_dict = rtile.model_dump(exclude=exclude_attrs)
+                rtile_dict = rtile.model_dump(exclude=attrs_exclude)
                 rtile_dict.update(tiling_dict)
-                rtile_dict["geometry"] = rtile.boundary_shapely
+                rtile_dict["geometry"] = shapely.segmentize(
+                    rtile.boundary_shapely, max_segment_length=max_segment_length
+                )
                 rtiles.append(rtile_dict)
 
         return GeoDataFrame(rtiles, crs=self.pyproj_crs)
@@ -861,20 +867,24 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         self,
         shp_path: Path,
         tiling_ids: list[str | int] | None = None,
-        exclude: set[str] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
     ) -> None:
-        """Write class attributes to a JSON file.
+        """Write tiles per tiling ID to a SHP file.
 
         Parameters
         ----------
         shp_path: Path
-            Path to JSON file.
+            Path to SHP file.
         tiling_ids: list[str | int] | None, optional
             List of tiling levels or names.
             Defaults to all tiling levels.
-        exclude: set[str] | None, optional
+        attrs_exclude: set[str] | None, optional
             Exclude raster tile object attributes.
             Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
 
         """
         tiling_levels = (
@@ -885,7 +895,11 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
         for tiling_level in tiling_levels:
             layer_name = self[tiling_level].name
             shp_layer_path = shp_path.parent / f"{shp_path.stem}_{layer_name}.shp"
-            self.to_geodataframe([tiling_level], exclude).to_file(shp_layer_path)
+            self.to_geodataframe(
+                [tiling_level],
+                attrs_exclude=attrs_exclude,
+                max_segment_length=max_segment_length,
+            ).to_file(shp_layer_path)
 
 
 def validate_regular_tilings(tilings: dict[int, RegularTiling]) -> None:
@@ -1405,7 +1419,7 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
             tilenames = []
             for geom in geog_geoms:
                 proj_geom = transform_geometry(
-                    geom, self.pyproj_crs, segment=DEF_SEG_LEN_DEG
+                    geom, self.pyproj_crs, max_segment_length=DEF_SEG_LEN_DEG
                 )
                 for raster_tile in self._tiles(
                     proj_geom.geom.bounds,

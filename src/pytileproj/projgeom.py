@@ -650,7 +650,7 @@ def split_polygon_by_antimeridian(
 def transform_geometry(
     proj_geom: ProjGeom,
     crs: Any,  # noqa: ANN401
-    segment: float | None = None,
+    max_segment_length: float | None = None,
 ) -> ProjGeom | GeogGeom:
     """Transform a geometry to the given target spatial reference system.
 
@@ -661,7 +661,7 @@ def transform_geometry(
     crs : Any
         Target CRS of the geometry. A projection definition
         pyproj.CRS can handle.
-    segment : float, optional
+    max_segment_length : float, optional
         For precision: distance in units of the geometry projection
         defining longest segment of the geometry.
 
@@ -679,8 +679,8 @@ def transform_geometry(
     src_geom = proj_geom.geom
 
     # modify the geometry such it has no segment longer then the given distance
-    if segment is not None:
-        src_geom = shapely.segmentize(src_geom, max_segment_length=segment)
+    if max_segment_length is not None:
+        src_geom = shapely.segmentize(src_geom, max_segment_length=max_segment_length)
 
     transformer = pyproj.Transformer.from_crs(proj_geom.crs, crs, always_xy=True)
     dst_geom = shapely.transform(src_geom, transformer.transform, interleaved=False)
@@ -709,7 +709,8 @@ def transform_geom_to_geog(proj_geom: ProjGeom) -> GeogGeom:
 
     """
     return cast(
-        "GeogGeom", transform_geometry(proj_geom, GEOG_EPSG, segment=DEF_SEG_LEN_M)
+        "GeogGeom",
+        transform_geometry(proj_geom, GEOG_EPSG, max_segment_length=DEF_SEG_LEN_M),
     )
 
 

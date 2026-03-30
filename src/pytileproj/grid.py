@@ -12,7 +12,7 @@ import orjson
 import shapely
 from pydantic import BaseModel, PrivateAttr, TypeAdapter, model_validator
 
-from pytileproj._const import JSON_INDENT
+from pytileproj._const import GEO_INSTALLED, JSON_INDENT
 from pytileproj._errors import GeomOutOfZoneError
 from pytileproj._types import RasterTileGenerator, SamplingFloatOrMap, T_co
 from pytileproj.projgeom import GeogCoord, ProjCoord
@@ -28,6 +28,9 @@ from pytileproj.tiling_system import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
+
+    if GEO_INSTALLED:
+        from geopandas import GeoDataFrame
 
 RG = TypeVar("RG", bound="RegularGrid[Any]")
 SYSTEM_ORDER_NAME = "system_order"
@@ -460,6 +463,84 @@ class RegularGrid(BaseModel, Generic[T_co], extra="allow"):
         pp_def = self.model_dump_json(indent=JSON_INDENT)
         with json_path.open("w") as f:
             f.writelines(pp_def)
+
+    def to_geodataframe(
+        self,
+        tiling_ids: list[str | int] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
+    ) -> Mapping[str, GeoDataFrame]:
+        """Create a geodataframe from all tiles within the system.
+
+        Parameters
+        ----------
+        tiling_ids: list[str | int] | None, optional
+            List of tiling levels or names.
+            Defaults to all tiling levels.
+        attrs_exclude: set[str] | None, optional
+            Exclude raster tile object attributes.
+            Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
+
+        Returns
+        -------
+        Mapping[str, GeoDataFrame]
+            System names linked to a dataframe where each row contains a
+            representation of a raster tile.
+
+        """
+        gdfs = {}
+        for system in self.system_order:
+            gdfs[system] = self[system].to_geodataframe(
+                tiling_ids=tiling_ids,
+                attrs_exclude=attrs_exclude,
+                max_segment_length=max_segment_length,
+            )
+        return gdfs
+
+    def to_shapefile(
+        self,
+        output_path: Path,
+        tiling_ids: list[str | int] | None = None,
+        attrs_exclude: set[str] | None = None,
+        max_segment_length: float | None = None,
+    ) -> None:
+        """Write tiles per system and tiling ID to a SHP file.
+
+        Parameters
+        ----------
+        output_path: Path
+            Directory path.
+        tiling_ids: list[str | int] | None, optional
+            List of tiling levels or names.
+            Defaults to all tiling levels.
+        attrs_exclude: set[str] | None, optional
+            Exclude raster tile object attributes.
+            Excludes the 'crs' attribute by default.
+        max_segment_length : float, optional
+            For precision: distance in units of the native projection
+            defining longest segment of the geometry.
+
+        """
+        for system in self.system_order:
+            tiling_levels = (
+                self[system].tiling_levels
+                if tiling_ids is None
+                else [
+                    self[system].tiling_id_to_level(tiling_id)
+                    for tiling_id in tiling_ids
+                ]
+            )
+            for tiling_level in tiling_levels:
+                layer_name = self[system][tiling_level].name
+                shp_layer_path = output_path / f"{system}_{layer_name}.shp"
+                self[system].to_geodataframe(
+                    [tiling_level],
+                    attrs_exclude=attrs_exclude,
+                    max_segment_length=max_segment_length,
+                ).to_file(shp_layer_path)
 
     def __getitem__(self, arg: str | ProjCoord) -> RPTS | list[RPTS]:
         """Return a regular, projected tiling system instance.
