@@ -856,9 +856,12 @@ class ProjTilingSystem(TilingSystem, ProjSystem):
                     continue
                 rtile_dict = rtile.model_dump(exclude=attrs_exclude)
                 rtile_dict.update(tiling_dict)
-                rtile_dict["geometry"] = shapely.segmentize(
-                    rtile.boundary_shapely, max_segment_length=max_segment_length
-                )
+                tile_boundary = rtile.boundary_shapely
+                if max_segment_length is not None:
+                    tile_boundary = shapely.segmentize(
+                        tile_boundary, max_segment_length=max_segment_length
+                    )
+                rtile_dict["geometry"] = tile_boundary
                 rtiles.append(rtile_dict)
 
         return GeoDataFrame(rtiles, crs=self.pyproj_crs)
