@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 1.1.1
+
+- suppressed PROJ4 conversion warnings
+
 ## Version 1.1.0
 
 - added segment size to tile export
