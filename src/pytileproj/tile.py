@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1002,11 +1003,17 @@ class RasterTile(BaseModel, Generic[T_co]):
     def __str__(self) -> str:
         """Extensive string representation."""
         n_chars = len(self.__class__.__name__)
+
+        # ignore loss of information during CRS to PROJ4 conversion
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            proj4_str = self.pyproj_crs.to_proj4()
+
         return (
             f"{self.__class__.__name__} \n{'-' * n_chars} \n"
             f"Name: \n{self.name} \n"
             f"Shape: \n({self.n_rows}, {self.n_cols})\n"
-            f"Projection: \n{self.pyproj_crs.to_proj4()}\n"
+            f"Projection: \n{proj4_str}\n"
             f"Geotransformation parameters: \n{self.geotrans}\n"
             f"Pixel origin: \n{self.px_origin}"
         )

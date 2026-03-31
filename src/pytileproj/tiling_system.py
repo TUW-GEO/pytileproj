@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, Self, TypeVar, cast
 
 import numpy as np
@@ -1616,10 +1617,16 @@ class RegularProjTilingSystem(ProjTilingSystem, Generic[T_co]):
     def __str__(self) -> str:
         """Extensive string representation."""
         n_chars = len(self.__class__.__name__)
+
+        # ignore loss of information during CRS to PROJ4 conversion
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            proj4_str = self.pyproj_crs.to_proj4()
+
         return (
             f"{self.__class__.__name__} \n{'-' * n_chars}\n"
             f"Name: \n{self.name}\n"
-            f"Projection: \n{self.pyproj_crs.to_proj4()}\n"
+            f"Projection: \n{proj4_str}\n"
             f"Tilings: \n{self.tilings}"
         )
 
